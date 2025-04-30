@@ -1,13 +1,25 @@
 
 import { useState, useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, Navigate } from 'react-router-dom';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import OfflineNotification from '@/components/OfflineNotification';
+import { useAuth } from '@/contexts/AuthContext';
 
 const Layout = () => {
+  const { user, isLoading } = useAuth();
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
+
+  // Redirect to login if not authenticated
+  if (!isLoading && !user) {
+    return <Navigate to="/auth/login" />;
+  }
+
+  // For profile not completed, redirect to profile setup
+  if (!isLoading && user && !user.profileCompleted) {
+    return <Navigate to="/auth/profile-setup" />;
+  }
 
   // Check if user is online or offline
   useEffect(() => {
@@ -55,6 +67,22 @@ const Layout = () => {
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
   };
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-pulse mt-2 flex justify-center space-x-1">
+            <div className="w-2 h-2 bg-gray-400 dark:bg-gray-600 rounded-full"></div>
+            <div className="w-2 h-2 bg-gray-400 dark:bg-gray-600 rounded-full"></div>
+            <div className="w-2 h-2 bg-gray-400 dark:bg-gray-600 rounded-full"></div>
+          </div>
+          <p className="mt-2 text-gray-600 dark:text-gray-300">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-screen">

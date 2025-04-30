@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import VoiceInput from "@/components/VoiceInput";
+import { useAuth } from "@/contexts/AuthContext";
 
 const educationLevels = [
   "High School",
@@ -34,8 +35,9 @@ const educationLevels = [
 const languages = ["English", "Hindi", "Tamil", "Telugu", "Kannada", "Malayalam"];
 
 const UserProfileSetupPage = () => {
+  const { user, updateUserProfile } = useAuth();
   const [formData, setFormData] = useState({
-    fullName: "",
+    fullName: user?.name || "",
     location: "",
     education: "",
     preferredLanguage: "",
@@ -103,6 +105,12 @@ const UserProfileSetupPage = () => {
       
       // Save to local storage for demo purposes
       localStorage.setItem("vidya_user_profile", JSON.stringify(formData));
+      
+      // Update user context with profile completed flag
+      updateUserProfile({ 
+        name: formData.fullName,
+        profileCompleted: true
+      });
       
       toast({
         title: "Success",

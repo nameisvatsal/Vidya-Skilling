@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 const SignupPage = () => {
   const [name, setName] = useState("");
@@ -16,6 +17,7 @@ const SignupPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { updateUserProfile } = useAuth();
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,7 +55,13 @@ const SignupPage = () => {
       // Mock API call
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // Simulating successful signup
+      // In a real app, this would call your backend API to create the user
+      // For now, we'll use localStorage as a mock
+      localStorage.setItem("vidya_user", JSON.stringify({ email }));
+      
+      // Update the name in the auth context
+      updateUserProfile({ name });
+      
       toast({
         title: "Success",
         description: "Account created successfully",
