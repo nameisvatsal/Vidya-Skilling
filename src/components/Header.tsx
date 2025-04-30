@@ -32,6 +32,9 @@ const Header = ({ isDarkMode, toggleDarkMode }: HeaderProps) => {
             <Link to="/credentials" className="text-gray-700 dark:text-gray-200 hover:text-vidya-primary dark:hover:text-vidya-secondary transition-colors">
               Credentials
             </Link>
+            <Link to="/hubs" className="text-gray-700 dark:text-gray-200 hover:text-vidya-primary dark:hover:text-vidya-secondary transition-colors">
+              Vidya Hubs
+            </Link>
           </nav>
         )}
 
@@ -53,7 +56,7 @@ const Header = ({ isDarkMode, toggleDarkMode }: HeaderProps) => {
             <Bell size={20} />
           </Button>
           
-          <Link to="/profile">
+          <Link to="/credentials">
             <Button variant="ghost" size="icon" className="text-gray-700 dark:text-gray-200">
               <User size={20} />
             </Button>
@@ -96,18 +99,25 @@ const Header = ({ isDarkMode, toggleDarkMode }: HeaderProps) => {
               Credentials
             </Link>
             <Link 
-              to="/settings" 
+              to="/hubs" 
               className="text-gray-700 dark:text-gray-200 hover:text-vidya-primary dark:hover:text-vidya-secondary py-2"
               onClick={() => setIsMenuOpen(false)}
             >
-              Settings
+              Vidya Hubs
             </Link>
             <Link 
-              to="/help" 
+              to="/languages" 
               className="text-gray-700 dark:text-gray-200 hover:text-vidya-primary dark:hover:text-vidya-secondary py-2"
               onClick={() => setIsMenuOpen(false)}
             >
-              Help
+              Languages
+            </Link>
+            <Link 
+              to="/offline" 
+              className="text-gray-700 dark:text-gray-200 hover:text-vidya-primary dark:hover:text-vidya-secondary py-2"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Offline Mode
             </Link>
           </div>
         </div>
