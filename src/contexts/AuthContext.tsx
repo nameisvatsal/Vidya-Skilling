@@ -28,16 +28,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   
   // Check for existing session on mount
   useEffect(() => {
+    console.log("Checking auth state on mount");
     const checkAuth = () => {
       try {
         const storedUser = localStorage.getItem("vidya_user");
         const storedProfile = localStorage.getItem("vidya_user_profile");
         
         if (storedUser) {
+          console.log("Found stored user data");
           const parsedUser = JSON.parse(storedUser);
           
           // If user has completed profile setup, merge that data
           if (storedProfile) {
+            console.log("Found stored profile data");
             const profile = JSON.parse(storedProfile);
             setUser({
               id: parsedUser.id || crypto.randomUUID(),
@@ -45,21 +48,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               name: profile.fullName,
               profileCompleted: true
             });
+            console.log("User authenticated with profile");
           } else {
             setUser({
               id: parsedUser.id || crypto.randomUUID(),
               email: parsedUser.email,
               profileCompleted: false
             });
+            console.log("User authenticated without profile");
           }
+        } else {
+          console.log("No stored user data found");
         }
       } catch (error) {
         console.error("Error checking authentication:", error);
         localStorage.removeItem("vidya_user");
         localStorage.removeItem("vidya_user_profile");
+      } finally {
+        setIsLoading(false);
       }
-      
-      setIsLoading(false);
     };
 
     checkAuth();
@@ -75,7 +82,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // Mock successful login - store basic user info
       const userId = crypto.randomUUID();
       const userData = { id: userId, email };
+      
+      // Important: Save to localStorage before updating state
       localStorage.setItem("vidya_user", JSON.stringify(userData));
+      console.log("Saved user data to localStorage:", userData);
       
       // Check if user has completed profile setup
       const storedProfile = localStorage.getItem("vidya_user_profile");
@@ -87,12 +97,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           profileCompleted: true
         });
         navigate("/");
+        console.log("User logged in with existing profile");
       } else {
         setUser({
           ...userData,
           profileCompleted: false
         });
         navigate("/auth/profile-setup");
+        console.log("User logged in, redirecting to profile setup");
       }
 
       return Promise.resolve();
@@ -114,7 +126,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // In a real app, this would call your backend API to create the user
       const userId = crypto.randomUUID();
       const userData = { id: userId, email };
+      
+      // Important: Save to localStorage before updating state
       localStorage.setItem("vidya_user", JSON.stringify(userData));
+      console.log("Saved new user data to localStorage:", userData);
       
       // Set minimal user data
       setUser({
@@ -124,6 +139,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         profileCompleted: false
       });
       
+      console.log("User signed up successfully");
       return Promise.resolve();
     } catch (error) {
       console.error("Signup error:", error);
@@ -134,7 +150,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const logout = () => {
+    console.log("Logging out user");
     localStorage.removeItem("vidya_user");
+    // We don't remove the profile data on logout to persist it for future logins
     setUser(null);
     navigate("/auth/login");
   };
@@ -155,6 +173,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }));
       
       localStorage.setItem("vidya_user_profile", JSON.stringify(storedProfile));
+      console.log("User profile updated and saved to localStorage");
     }
   };
 

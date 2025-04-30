@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { Outlet, Navigate } from 'react-router-dom';
+import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import OfflineNotification from '@/components/OfflineNotification';
@@ -10,16 +10,7 @@ const Layout = () => {
   const { user, isLoading } = useAuth();
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
-
-  // Redirect to login if not authenticated
-  if (!isLoading && !user) {
-    return <Navigate to="/auth/login" />;
-  }
-
-  // For profile not completed, redirect to profile setup
-  if (!isLoading && user && !user.profileCompleted) {
-    return <Navigate to="/auth/profile-setup" />;
-  }
+  const location = useLocation();
 
   // Check if user is online or offline
   useEffect(() => {
@@ -82,6 +73,18 @@ const Layout = () => {
         </div>
       </div>
     );
+  }
+
+  // Redirect to login if not authenticated
+  if (!user) {
+    console.log('User not authenticated, redirecting to login');
+    return <Navigate to="/auth/login" state={{ from: location }} replace />;
+  }
+
+  // For profile not completed, redirect to profile setup
+  if (user && !user.profileCompleted) {
+    console.log('Profile not complete, redirecting to profile setup');
+    return <Navigate to="/auth/profile-setup" replace />;
   }
 
   return (

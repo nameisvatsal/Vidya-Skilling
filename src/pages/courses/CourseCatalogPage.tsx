@@ -88,32 +88,42 @@ const CourseCatalogPage = () => {
     language: "",
   });
 
+  // Log when the component mounts
+  useEffect(() => {
+    console.log("Course Catalog Page mounted");
+  }, []);
+
   useEffect(() => {
     // Apply filters and search
-    let result = [...allCourses];
-    
-    if (searchTerm) {
-      result = result.filter(
-        (course) =>
-          course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          course.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          course.category.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+    try {
+      let result = [...allCourses];
+      
+      if (searchTerm) {
+        result = result.filter(
+          (course) =>
+            course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            course.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            course.category.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      }
+      
+      if (filters.category) {
+        result = result.filter((course) => course.category === filters.category);
+      }
+      
+      if (filters.level) {
+        result = result.filter((course) => course.level === filters.level);
+      }
+      
+      if (filters.language) {
+        result = result.filter((course) => course.language === filters.language);
+      }
+      
+      setFilteredCourses(result);
+    } catch (error) {
+      console.error("Error filtering courses:", error);
+      setFilteredCourses(allCourses); // Fall back to all courses
     }
-    
-    if (filters.category) {
-      result = result.filter((course) => course.category === filters.category);
-    }
-    
-    if (filters.level) {
-      result = result.filter((course) => course.level === filters.level);
-    }
-    
-    if (filters.language) {
-      result = result.filter((course) => course.language === filters.language);
-    }
-    
-    setFilteredCourses(result);
   }, [searchTerm, filters]);
 
   const handleFilterChange = (key: string, value: string) => {
@@ -135,7 +145,7 @@ const CourseCatalogPage = () => {
   };
 
   return (
-    <div className="page-container">
+    <div className="container mx-auto px-4 py-8">
       <h1 className="text-2xl md:text-3xl font-bold mb-6">Course Catalog</h1>
       
       <div className="mb-6">
