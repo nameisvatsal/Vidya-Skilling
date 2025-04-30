@@ -14,53 +14,32 @@ const SignupPage = () => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [formError, setFormError] = useState("");
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { updateUserProfile } = useAuth();
+  const { signup, isLoading } = useAuth();
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError("");
     
     if (!name || !email || !password || !confirmPassword) {
-      toast({
-        title: "Error",
-        description: "Please fill in all fields",
-        variant: "destructive",
-      });
+      setFormError("Please fill in all fields");
       return;
     }
     
     if (password !== confirmPassword) {
-      toast({
-        title: "Error",
-        description: "Passwords do not match",
-        variant: "destructive",
-      });
+      setFormError("Passwords do not match");
       return;
     }
     
     if (password.length < 8) {
-      toast({
-        title: "Error",
-        description: "Password must be at least 8 characters",
-        variant: "destructive",
-      });
+      setFormError("Password must be at least 8 characters");
       return;
     }
     
-    setIsLoading(true);
-    
     try {
-      // Mock API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // In a real app, this would call your backend API to create the user
-      // For now, we'll use localStorage as a mock
-      localStorage.setItem("vidya_user", JSON.stringify({ email }));
-      
-      // Update the name in the auth context
-      updateUserProfile({ name });
+      await signup(email, password, name);
       
       toast({
         title: "Success",
@@ -70,13 +49,12 @@ const SignupPage = () => {
       // Redirect to profile setup
       navigate("/auth/profile-setup");
     } catch (error) {
+      setFormError("Failed to create account. Please try again.");
       toast({
         title: "Error",
         description: "Failed to create account. Please try again.",
         variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -98,6 +76,12 @@ const SignupPage = () => {
           
           <form onSubmit={handleSignup}>
             <CardContent className="space-y-4">
+              {formError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-md text-sm">
+                  {formError}
+                </div>
+              )}
+              
               <div className="space-y-2">
                 <label htmlFor="name" className="text-sm font-medium">
                   Name
@@ -108,6 +92,7 @@ const SignupPage = () => {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
+                  disabled={isLoading}
                 />
               </div>
               
@@ -122,6 +107,7 @@ const SignupPage = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  disabled={isLoading}
                 />
               </div>
               
@@ -137,6 +123,7 @@ const SignupPage = () => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
+                    disabled={isLoading}
                   />
                   <Button
                     type="button"
@@ -144,6 +131,7 @@ const SignupPage = () => {
                     size="icon"
                     className="absolute right-0 top-0"
                     onClick={() => setShowPassword(!showPassword)}
+                    disabled={isLoading}
                   >
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </Button>
@@ -164,6 +152,7 @@ const SignupPage = () => {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
+                  disabled={isLoading}
                 />
               </div>
             </CardContent>

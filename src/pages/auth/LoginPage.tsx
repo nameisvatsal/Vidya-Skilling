@@ -12,18 +12,16 @@ const LoginPage = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [formError, setFormError] = useState("");
   const { toast } = useToast();
   const { login, isLoading } = useAuth();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError("");
     
     if (!email || !password) {
-      toast({
-        title: "Error",
-        description: "Please fill in all fields",
-        variant: "destructive",
-      });
+      setFormError("Please fill in all fields");
       return;
     }
     
@@ -35,6 +33,7 @@ const LoginPage = () => {
         description: "You have successfully logged in",
       });
     } catch (error) {
+      setFormError("Invalid email or password");
       toast({
         title: "Error",
         description: "Invalid email or password",
@@ -61,6 +60,12 @@ const LoginPage = () => {
           
           <form onSubmit={handleLogin}>
             <CardContent className="space-y-4">
+              {formError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-md text-sm">
+                  {formError}
+                </div>
+              )}
+              
               <div className="space-y-2">
                 <label htmlFor="email" className="text-sm font-medium">
                   Email
@@ -72,6 +77,7 @@ const LoginPage = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  disabled={isLoading}
                 />
               </div>
               
@@ -87,6 +93,7 @@ const LoginPage = () => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
+                    disabled={isLoading}
                   />
                   <Button
                     type="button"
@@ -94,13 +101,25 @@ const LoginPage = () => {
                     size="icon"
                     className="absolute right-0 top-0"
                     onClick={() => setShowPassword(!showPassword)}
+                    disabled={isLoading}
                   >
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </Button>
                 </div>
               </div>
               
-              <div className="flex items-center justify-end">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <input 
+                    type="checkbox" 
+                    id="remember" 
+                    className="rounded border-gray-300 text-vidya-primary focus:ring-vidya-primary"
+                  />
+                  <label htmlFor="remember" className="text-sm text-gray-600 dark:text-gray-400">
+                    Remember me
+                  </label>
+                </div>
+                
                 <Link to="/auth/reset-password" className="text-sm text-vidya-primary hover:underline">
                   Forgot password?
                 </Link>

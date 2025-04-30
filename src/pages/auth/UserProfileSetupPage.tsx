@@ -47,6 +47,7 @@ const UserProfileSetupPage = () => {
   });
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
+  const [formError, setFormError] = useState("");
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -66,23 +67,17 @@ const UserProfileSetupPage = () => {
   };
 
   const handleNext = () => {
+    setFormError("");
+    
     if (step === 1) {
       if (!formData.fullName || !formData.location || !formData.education) {
-        toast({
-          title: "Error",
-          description: "Please fill in all required fields",
-          variant: "destructive",
-        });
+        setFormError("Please fill in all required fields");
         return;
       }
       setStep(2);
     } else if (step === 2) {
       if (!formData.preferredLanguage || !formData.interests) {
-        toast({
-          title: "Error",
-          description: "Please fill in all required fields",
-          variant: "destructive",
-        });
+        setFormError("Please fill in all required fields");
         return;
       }
       setStep(3);
@@ -97,20 +92,17 @@ const UserProfileSetupPage = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError("");
     setIsLoading(true);
     
     try {
-      // Mock API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Save to local storage for demo purposes
-      localStorage.setItem("vidya_user_profile", JSON.stringify(formData));
-      
-      // Update user context with profile completed flag
+      // Update user profile with the form data
       updateUserProfile({ 
         name: formData.fullName,
-        profileCompleted: true
       });
+      
+      // Save comprehensive profile data to localStorage
+      localStorage.setItem("vidya_user_profile", JSON.stringify(formData));
       
       toast({
         title: "Success",
@@ -119,6 +111,7 @@ const UserProfileSetupPage = () => {
       
       navigate("/");
     } catch (error) {
+      setFormError("Failed to save profile. Please try again.");
       toast({
         title: "Error",
         description: "Failed to save profile. Please try again.",
@@ -147,6 +140,12 @@ const UserProfileSetupPage = () => {
           
           <form onSubmit={handleSubmit}>
             <CardContent>
+              {formError && (
+                <div className="p-3 mb-4 bg-red-50 border border-red-200 text-red-600 rounded-md text-sm">
+                  {formError}
+                </div>
+              )}
+            
               {step === 1 && (
                 <div className="space-y-4">
                   <div className="space-y-2">
@@ -297,16 +296,15 @@ const UserProfileSetupPage = () => {
               {step < 3 ? (
                 <Button 
                   type="button" 
-                  className="bg-vidya-primary hover:bg-vidya-dark"
+                  className="bg-vidya-primary hover:bg-vidya-dark ml-auto"
                   onClick={handleNext}
-                  disabled={isLoading}
                 >
                   Next
                 </Button>
               ) : (
                 <Button 
                   type="submit" 
-                  className="bg-vidya-primary hover:bg-vidya-dark"
+                  className="bg-vidya-primary hover:bg-vidya-dark ml-auto"
                   disabled={isLoading}
                 >
                   {isLoading ? "Saving..." : "Complete Setup"}
