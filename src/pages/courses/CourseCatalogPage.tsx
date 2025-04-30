@@ -83,9 +83,9 @@ const CourseCatalogPage = () => {
   const [filteredCourses, setFilteredCourses] = useState(allCourses);
   const [isVoiceSearch, setIsVoiceSearch] = useState(false);
   const [filters, setFilters] = useState({
-    category: "",
-    level: "",
-    language: "",
+    category: "all",
+    level: "all",
+    language: "all",
   });
 
   // Log when the component mounts
@@ -96,6 +96,7 @@ const CourseCatalogPage = () => {
   useEffect(() => {
     // Apply filters and search
     try {
+      console.log("Applying filters:", filters);
       let result = [...allCourses];
       
       if (searchTerm) {
@@ -107,18 +108,19 @@ const CourseCatalogPage = () => {
         );
       }
       
-      if (filters.category) {
+      if (filters.category && filters.category !== "all") {
         result = result.filter((course) => course.category === filters.category);
       }
       
-      if (filters.level) {
+      if (filters.level && filters.level !== "all") {
         result = result.filter((course) => course.level === filters.level);
       }
       
-      if (filters.language) {
+      if (filters.language && filters.language !== "all") {
         result = result.filter((course) => course.language === filters.language);
       }
       
+      console.log("Filtered courses count:", result.length);
       setFilteredCourses(result);
     } catch (error) {
       console.error("Error filtering courses:", error);
@@ -127,6 +129,7 @@ const CourseCatalogPage = () => {
   }, [searchTerm, filters]);
 
   const handleFilterChange = (key: string, value: string) => {
+    console.log(`Changing filter ${key} to ${value}`);
     setFilters((prev) => ({ ...prev, [key]: value }));
   };
 
@@ -137,9 +140,9 @@ const CourseCatalogPage = () => {
 
   const clearFilters = () => {
     setFilters({
-      category: "",
-      level: "",
-      language: "",
+      category: "all",
+      level: "all",
+      language: "all",
     });
     setSearchTerm("");
   };
@@ -194,7 +197,7 @@ const CourseCatalogPage = () => {
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Categories</SelectItem>
+                <SelectItem value="all">All Categories</SelectItem>
                 <SelectItem value="Technology">Technology</SelectItem>
                 <SelectItem value="Business">Business</SelectItem>
                 <SelectItem value="Marketing">Marketing</SelectItem>
@@ -210,7 +213,7 @@ const CourseCatalogPage = () => {
                 <SelectValue placeholder="Level" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Levels</SelectItem>
+                <SelectItem value="all">All Levels</SelectItem>
                 <SelectItem value="Beginner">Beginner</SelectItem>
                 <SelectItem value="Intermediate">Intermediate</SelectItem>
                 <SelectItem value="Advanced">Advanced</SelectItem>
@@ -225,7 +228,7 @@ const CourseCatalogPage = () => {
                 <SelectValue placeholder="Language" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Languages</SelectItem>
+                <SelectItem value="all">All Languages</SelectItem>
                 <SelectItem value="English">English</SelectItem>
                 <SelectItem value="Hindi">Hindi</SelectItem>
                 <SelectItem value="Tamil">Tamil</SelectItem>
@@ -236,13 +239,13 @@ const CourseCatalogPage = () => {
             </Select>
           </div>
           
-          {(filters.category || filters.level || filters.language || searchTerm) && (
+          {((filters.category !== "all") || (filters.level !== "all") || (filters.language !== "all") || searchTerm) && (
             <div className="flex justify-between items-center mb-4">
               <div className="text-sm">
                 Showing {filteredCourses.length} results
-                {filters.category && <span> in {filters.category}</span>}
-                {filters.level && <span> at {filters.level} level</span>}
-                {filters.language && <span> in {filters.language}</span>}
+                {filters.category !== "all" && <span> in {filters.category}</span>}
+                {filters.level !== "all" && <span> at {filters.level} level</span>}
+                {filters.language !== "all" && <span> in {filters.language}</span>}
                 {searchTerm && <span> for "{searchTerm}"</span>}
               </div>
               <Button variant="ghost" size="sm" onClick={clearFilters}>
