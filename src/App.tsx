@@ -37,6 +37,8 @@ function App() {
               <Route index element={<HomePage />} />
               <Route path="profile" element={<ProfilePage />} />
               <Route path="vidya-hub" element={<VidyaHubPage />} />
+              {/* Add redirect from /hubs to /vidya-hub */}
+              <Route path="hubs" element={<Navigate to="/vidya-hub" replace />} />
               
               {/* Course Routes */}
               <Route path="courses" element={<CourseCatalogPage />} />
@@ -45,8 +47,8 @@ function App() {
               
               {/* Credential Routes */}
               <Route path="credentials" element={<MyPortfolioPage />} />
-              <Route path="credentials/:id" element={<CertificateViewPage />} />
               <Route path="credentials/verify" element={<CredentialVerifyPage />} />
+              <Route path="credentials/:id" element={<CertificateViewPage />} />
               
               {/* Progress Routes */}
               <Route path="progress" element={<ProgressDashboardPage />} />
