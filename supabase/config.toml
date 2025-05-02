@@ -1,1 +1,8 @@
+
 project_id = "kbmttapvkjdfevzdprgo"
+
+[functions.gemini-ai]
+verify_jwt = false
+
+[functions.whisper-transcription]
+verify_jwt = false

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ChevronLeft, ChevronRight, List, Download, CheckCircle, Play } from "lucide-react";
@@ -6,7 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import VoiceInput from "@/components/VoiceInput";
+import EnhancedVoiceInput from "@/components/EnhancedVoiceInput";
+import AdaptiveContent from "@/components/AdaptiveContent";
+import { useOffline } from "@/contexts/OfflineContext";
+import { AIService } from "@/services/AIService";
+import LanguageSelector from "@/components/LanguageSelector";
 
 // Mock course data
 const courses = [
@@ -94,7 +97,12 @@ const ModulePlayerPage = () => {
   const [isCompleting, setIsCompleting] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [currentLanguage, setCurrentLanguage] = useState<string>("en");
+  const [aiResponse, setAiResponse] = useState<string>("");
+  const [userQuestion, setUserQuestion] = useState<string>("");
+  const [isLoadingAI, setIsLoadingAI] = useState<boolean>(false);
   const { toast } = useToast();
+  const { isOnline, queueSync } = useOffline();
   
   useEffect(() => {
     // Find course and module
@@ -108,7 +116,26 @@ const ModulePlayerPage = () => {
         setModuleIndex(foundModuleIndex);
       }
     }
-  }, [id, moduleId]);
+    
+    // Try to load from localStorage if offline
+    if (!isOnline) {
+      const offlineCourse = localStorage.getItem(`course_${id}`);
+      if (offlineCourse) {
+        try {
+          const parsedCourse = JSON.parse(offlineCourse);
+          setCourse(parsedCourse);
+          
+          const foundModuleIndex = parsedCourse.modules.findIndex((m: any) => m.id === moduleId);
+          if (foundModuleIndex !== -1) {
+            setModule(parsedCourse.modules[foundModuleIndex]);
+            setModuleIndex(foundModuleIndex);
+          }
+        } catch (e) {
+          console.error('Failed to parse offline course data:', e);
+        }
+      }
+    }
+  }, [id, moduleId, isOnline]);
 
   const handleComplete = () => {
     setIsCompleting(true);
@@ -123,6 +150,19 @@ const ModulePlayerPage = () => {
       const updatedCourse = { ...course, modules: updatedModules };
       setCourse(updatedCourse);
       setModule({ ...module, completed: true });
+      
+      // Save to localStorage for offline access
+      localStorage.setItem(`course_${id}`, JSON.stringify(updatedCourse));
+      
+      // If we're online, queue this for sync
+      if (isOnline) {
+        queueSync(`course_completion_${id}_${moduleId}`, {
+          courseId: id,
+          moduleId: moduleId,
+          completed: true,
+          timestamp: new Date().toISOString()
+        });
+      }
       
       toast({
         title: "Module Completed",
@@ -145,6 +185,62 @@ const ModulePlayerPage = () => {
       const prevModuleId = course.modules[moduleIndex - 1].id;
       window.location.href = `/courses/${id}/module/${prevModuleId}`;
     }
+  };
+  
+  const handleVoiceInput = (text: string) => {
+    setUserQuestion(text);
+    handleAskAI(text);
+  };
+  
+  const handleAskAI = async (question: string) => {
+    if (!question.trim()) return;
+    
+    setIsLoadingAI(true);
+    
+    try {
+      // Prepare context from current module content
+      const context = module.content ? `Context: ${module.content}\n\n` : '';
+      
+      // Send to AI service
+      const response = await AIService.generateContent({
+        prompt: `${context}Question: ${question}\n\nAnswer this question based on the learning content. If the question isn't related to the content, politely say you can only answer questions about the course material.`,
+        language: { target: currentLanguage },
+        mode: "text"
+      });
+      
+      if (response.success) {
+        setAiResponse(response.result);
+        
+        // Cache this interaction for offline use
+        const cacheKey = `ai_interaction_${Buffer.from(question.substring(0, 50)).toString('base64').substring(0, 20)}`;
+        queueSync(cacheKey, {
+          question,
+          answer: response.result,
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        setAiResponse("I'm sorry, I couldn't generate a response. Please try again later.");
+        toast({
+          title: "AI Response Error",
+          description: "Could not get an answer from our AI assistant.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error getting AI response:", error);
+      setAiResponse("I'm sorry, I encountered an error while processing your question.");
+      toast({
+        title: "Error",
+        description: "Failed to get AI response.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingAI(false);
+    }
+  };
+  
+  const handleLanguageChange = (language: string) => {
+    setCurrentLanguage(language);
   };
 
   if (!course || !module) {
@@ -194,6 +290,14 @@ const ModulePlayerPage = () => {
           </Button>
         </div>
         
+        {/* Offline/Online indicator */}
+        <div className={`px-4 py-2 text-xs flex items-center 
+          ${isOnline ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"}`}>
+          <div className={`w-2 h-2 rounded-full mr-1 
+            ${isOnline ? "bg-green-600 dark:bg-green-400" : "bg-amber-600 dark:bg-amber-400"}`}></div>
+          {isOnline ? "Online" : "Offline Mode"}
+        </div>
+        
         <div className="p-4">
           <div className="mb-4">
             <div className="flex justify-between text-sm mb-1">
@@ -201,6 +305,32 @@ const ModulePlayerPage = () => {
               <span>{courseProgress}%</span>
             </div>
             <Progress value={parseInt(courseProgress)} className="h-2" />
+          </div>
+          
+          <div className="mb-4">
+            <LanguageSelector 
+              currentLanguage={currentLanguage}
+              onLanguageChange={handleLanguageChange}
+            />
+          </div>
+          
+          <div className="mb-4">
+            <Button 
+              variant="outline"
+              size="sm"
+              className="w-full flex items-center gap-2"
+              onClick={() => {
+                // Save course for offline use
+                localStorage.setItem(`course_${id}`, JSON.stringify(course));
+                toast({
+                  title: "Downloaded for Offline Use",
+                  description: "This course is now available offline.",
+                });
+              }}
+            >
+              <Download size={14} />
+              Save for Offline
+            </Button>
           </div>
           
           <div className="space-y-1">
@@ -263,18 +393,23 @@ const ModulePlayerPage = () => {
                   <TabsTrigger value="content">Content</TabsTrigger>
                   <TabsTrigger value="transcript">Transcript</TabsTrigger>
                   <TabsTrigger value="notes">Notes</TabsTrigger>
+                  <TabsTrigger value="ai-support">AI Support</TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="content" className="p-4">
-                  <div className="prose dark:prose-invert">
-                    <p>{module.content}</p>
-                  </div>
+                  <AdaptiveContent 
+                    content={module.content}
+                    language={currentLanguage}
+                    showControls={true}
+                  />
                 </TabsContent>
                 
                 <TabsContent value="transcript" className="p-4">
-                  <div className="prose dark:prose-invert">
-                    <p>{module.transcript}</p>
-                  </div>
+                  <AdaptiveContent 
+                    content={module.transcript}
+                    language={currentLanguage}
+                    showControls={true}
+                  />
                 </TabsContent>
                 
                 <TabsContent value="notes" className="p-4">
@@ -292,6 +427,64 @@ const ModulePlayerPage = () => {
                     <div className="mt-4">
                       <Button size="sm">Save Notes</Button>
                     </div>
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="ai-support" className="p-4">
+                  <div className="space-y-4">
+                    <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                      <h3 className="text-lg font-medium mb-2">Ask About This Lesson</h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                        Use your voice or type to ask questions about the content in this module.
+                      </p>
+                      
+                      <EnhancedVoiceInput 
+                        onTextCapture={handleVoiceInput}
+                        placeholder="Click to ask a question about this lesson"
+                        language={currentLanguage}
+                      />
+                      
+                      <div className="mt-4">
+                        <input
+                          type="text"
+                          className="w-full p-3 border rounded-md dark:bg-gray-900 dark:border-gray-700"
+                          placeholder="Or type your question here..."
+                          value={userQuestion}
+                          onChange={(e) => setUserQuestion(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              handleAskAI(userQuestion);
+                            }
+                          }}
+                        />
+                        
+                        <div className="mt-2 flex justify-end">
+                          <Button 
+                            onClick={() => handleAskAI(userQuestion)}
+                            disabled={isLoadingAI || !userQuestion.trim()}
+                          >
+                            {isLoadingAI ? "Processing..." : "Ask"}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {(aiResponse || isLoadingAI) && (
+                      <div className="bg-white dark:bg-gray-800 border rounded-lg p-4">
+                        <h4 className="font-medium mb-2">AI Response</h4>
+                        {isLoadingAI ? (
+                          <div className="py-8 flex justify-center">
+                            <div className="animate-pulse flex space-x-1">
+                              <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                              <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                              <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-gray-700 dark:text-gray-300">{aiResponse}</p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </TabsContent>
               </Tabs>
@@ -324,6 +517,14 @@ const ModulePlayerPage = () => {
                     variant="outline"
                     size="sm"
                     className="flex items-center gap-1"
+                    onClick={() => {
+                      // Save module for offline use
+                      localStorage.setItem(`module_${moduleId}`, JSON.stringify(module));
+                      toast({
+                        title: "Downloaded for Offline Use",
+                        description: "This module is now available offline.",
+                      });
+                    }}
                   >
                     <Download size={16} />
                     Download
