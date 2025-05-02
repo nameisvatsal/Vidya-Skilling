@@ -29,10 +29,10 @@ function App() {
       <OfflineProvider>
         <AuthProvider>
           <Routes>
-            {/* Auth Routes */}
-            <Route path="/auth/login" element={<LoginPage />} />
-            <Route path="/auth/signup" element={<SignupPage />} />
-            <Route path="/auth/profile-setup" element={<UserProfileSetupPage />} />
+            {/* Auth Routes - redirect to home */}
+            <Route path="/auth/login" element={<Navigate to="/" replace />} />
+            <Route path="/auth/signup" element={<Navigate to="/" replace />} />
+            <Route path="/auth/profile-setup" element={<Navigate to="/" replace />} />
             
             {/* App Routes */}
             <Route path="/" element={<Layout />}>

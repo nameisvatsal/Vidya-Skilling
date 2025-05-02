@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { Outlet, Navigate, useLocation } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import OfflineNotification from '@/components/OfflineNotification';
@@ -76,19 +76,7 @@ const Layout = () => {
     );
   }
 
-  // Redirect to login if not authenticated
-  if (!user) {
-    console.log('Layout: User not authenticated, redirecting to login', {pathname: location.pathname});
-    return <Navigate to="/auth/login" state={{ from: location }} replace />;
-  }
-
-  // For profile not completed, redirect to profile setup only if not already there
-  if (user && !user.profileCompleted && location.pathname !== "/auth/profile-setup") {
-    console.log('Layout: Profile not complete, redirecting to profile setup');
-    return <Navigate to="/auth/profile-setup" replace />;
-  }
-
-  console.log('Layout: Rendering main layout', {user});
+  // Always render the main layout - no redirects
   return (
     <div className="flex flex-col min-h-screen">
       {isOffline && <OfflineNotification />}
