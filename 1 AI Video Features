@@ -1,0 +1,182 @@
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import List, Optional
+import google.generativeai as genai
+from motor.motor_asyncio import AsyncIOMotorClient
+import os
+import json
+from datetime import datetime
+from urllib.parse import urlparse, parse_qs
+import requests
+from youtube_transcript_api import YouTubeTranscriptApi
+
+app = FastAPI(title="Vidya Enhanced Backend", version="2.0")
+
+# Configure Gemini
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+model = genai.GenerativeModel("gemini-pro")
+
+# MongoDB setup
+client = AsyncIOMotorClient(os.getenv("MONGODB_URI"))
+db = client.vidya
+
+class YouTubePlaylistRequest(BaseModel):
+    playlist_url: str
+    user_id: str
+    learning_goals: Optional[List[str]] = None
+
+class VideoAnalysisRequest(BaseModel):
+    video_id: str
+    analysis_type: str  # "summary", "quiz", "learning_style"
+
+# YouTube API helper
+async def extract_playlist_videos(playlist_url: str):
+    try:
+        parsed = urlparse(playlist_url)
+        playlist_id = parse_qs(parsed.query).get('list', [None])[0]
+        
+        # In production, use YouTube API v3
+        # Mock response for example:
+        mock_videos = [
+            {"videoId": "dQw4w9WgXcQ", "title": "Python Basics"},
+            {"videoId": "9bZkp7q19f0", "title": "Advanced Python"}
+        ]
+        return mock_videos
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid playlist URL: {str(e)}")
+
+@app.post("/learning-path/from-playlist")
+async def generate_learning_path_from_playlist(request: YouTubePlaylistRequest):
+    """Generate learning path from YouTube playlist"""
+    try:
+        videos = await extract_playlist_videos(request.playlist_url)
+        user = await db.users.find_one({"_id": request.user_id})
+        
+        prompt = f"""
+        Create a personalized learning path from these YouTube videos for user {user['name']}:
+        Videos: {json.dumps(videos)}
+        User Profile: {json.dumps(user)}
+        Learning Goals: {request.learning_goals}
+        
+        Include:
+        1. Recommended viewing order
+        2. Suggested watch speed (0.5-2.0)
+        3. Key concepts per video
+        4. Estimated time commitment
+        
+        Return as JSON with this structure:
+        {{
+            "path": [
+                {{
+                    "video_id": str,
+                    "title": str,
+                    "recommended_order": int,
+                    "speed": float,
+                    "key_concepts": [str],
+                    "estimated_time": int (minutes)
+                }}
+            ],
+            "total_duration": int (minutes),
+            "learning_outcomes": [str]
+        }}
+        """
+        response = await model.generate_content_async(prompt)
+        return json.loads(response.text)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/video/analyze")
+async def analyze_video(request: VideoAnalysisRequest):
+    """Perform AI analysis on a video"""
+    try:
+        if request.analysis_type == "summary":
+            transcript = YouTubeTranscriptApi.get_transcript(request.video_id)
+            transcript_text = " ".join([t['text'] for t in transcript])
+            
+            prompt = f"""
+            Create a comprehensive summary of this video transcript:
+            {transcript_text}
+            
+            Include:
+            1. Key points (bullet points)
+            2. Main takeaways
+            3. Difficulty level (beginner/intermediate/advanced)
+            """
+            response = await model.generate_content_async(prompt)
+            return {"type": "summary", "content": response.text}
+            
+        elif request.analysis_type == "quiz":
+            transcript = YouTubeTranscriptApi.get_transcript(request.video_id)
+            transcript_text = " ".join([t['text'] for t in transcript])
+            
+            prompt = f"""
+            Generate a 5-question quiz based on this video content:
+            {transcript_text}
+            
+            Format each question with:
+            - Question text
+            - 4 multiple choice options
+            - Correct answer
+            - Difficulty (1-5)
+            """
+            response = await model.generate_content_async(prompt)
+            return {"type": "quiz", "content": response.text}
+            
+        elif request.analysis_type == "learning_style":
+            # This would use computer vision analysis in production
+            prompt = f"""
+            Based on typical learning style indicators from video {request.video_id},
+            suggest the optimal learning approach for this content.
+            
+            Consider:
+            - Visual elements
+            - Presentation style
+            - Content complexity
+            
+            Return recommendations for:
+            1. Best viewing speed
+            2. Note-taking strategy
+            3. Ideal viewing environment
+            """
+            response = await model.generate_content_async(prompt)
+            return {"type": "learning_style", "content": response.text}
+            
+        else:
+            raise HTTPException(status_code=400, detail="Invalid analysis type")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/video/suggest-supplements")
+async def suggest_supplements(video_id: str, user_id: str):
+    """Recommend additional learning materials"""
+    try:
+        user = await db.users.find_one({"_id": user_id})
+        video = await db.videos.find_one({"_id": video_id})
+        
+        prompt = f"""
+        For user {user['name']} who watched video {video['title']},
+        suggest 3 supplemental learning resources based on:
+        - User's learning style: {user['preferred_modality']}
+        - Knowledge level: {user.get('knowledge_level', 'unknown')}
+        - Video content: {video.get('tags', [])}
+        
+        Format as:
+        {{
+            "supplements": [
+                {{
+                    "type": "article/video/book",
+                    "title": str,
+                    "url": str,
+                    "reason": str
+                }}
+            ]
+        }}
+        """
+        response = await model.generate_content_async(prompt)
+        return json.loads(response.text)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
