@@ -30,9 +30,7 @@ function App() {
         <AuthProvider>
           <Routes>
             {/* Auth Routes - redirect to home */}
-            <Route path="/auth/login" element={<Navigate to="/" replace />} />
-            <Route path="/auth/signup" element={<Navigate to="/" replace />} />
-            <Route path="/auth/profile-setup" element={<Navigate to="/" replace />} />
+            <Route path="/auth/*" element={<Navigate to="/" replace />} />
             
             {/* App Routes */}
             <Route path="/" element={<Layout />}>
