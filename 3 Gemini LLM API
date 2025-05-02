@@ -1,0 +1,251 @@
+import sqlite3
+from pathlib import Path
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import List, Optional, Dict
+import hashlib
+import json
+from datetime import datetime
+import os
+import google.generativeai as genai
+from enum import Enum
+import zipfile
+import tempfile
+
+# Initialize FastAPI
+app = FastAPI(title="Vidya Ethical AI Backend", version="4.0")
+
+# Configure Gemini
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+genai.configure(api_key=GEMINI_API_KEY)
+gemini_model = genai.GenerativeModel('gemini-pro')
+
+# Constants for offline operation
+CONTENT_CACHE_DIR = Path("./content_cache")
+MODELS_DIR = Path("./models")
+DB_PATH = Path("./vidya_offline.db")
+OFFLINE_MODE = os.getenv("OFFLINE_MODE", "false").lower() == "true"
+
+# Initialize database
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS learning_adaptation_profiles (
+        user_id TEXT PRIMARY KEY,
+        learning_style TEXT,
+        pace TEXT,
+        knowledge_map TEXT,
+        last_updated TEXT
+    )
+    """)
+    
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS cached_responses (
+        query_hash TEXT PRIMARY KEY,
+        response_text TEXT,
+        timestamp TEXT
+    )
+    """)
+    
+    conn.commit()
+    conn.close()
+
+init_db()
+
+class ContentType(str, Enum):
+    VIDEO = "video"
+    ARTICLE = "article"
+    EXERCISE = "exercise"
+    ASSESSMENT = "assessment"
+
+class DeviceCapabilities(BaseModel):
+    is_online: bool
+    has_low_bandwidth: bool
+    preferred_languages: List[str]
+    storage_available_mb: int
+
+class LearningRequest(BaseModel):
+    user_id: str
+    topic: str
+    current_progress: Dict[str, float]  # {content_id: completion_percentage}
+    device_caps: DeviceCapabilities
+
+def get_cached_response(query: str) -> Optional[str]:
+    """Check for cached Gemini responses"""
+    query_hash = hashlib.md5(query.encode()).hexdigest()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT response_text FROM cached_responses WHERE query_hash=?", (query_hash,))
+    result = cursor.fetchone()
+    conn.close()
+    return result[0] if result else None
+
+def cache_response(query: str, response: str):
+    """Cache Gemini responses for offline use"""
+    query_hash = hashlib.md5(query.encode()).hexdigest()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT OR REPLACE INTO cached_responses VALUES (?, ?, ?)",
+        (query_hash, response, datetime.now().isoformat())
+    )
+    conn.commit()
+    conn.close()
+
+async def get_adaptive_recommendation(request: LearningRequest) -> Dict:
+    """Get personalized learning path using Gemini with offline fallback"""
+    # Construct the prompt for Gemini
+    prompt = f"""
+    Generate a personalized learning path for user {request.user_id} with these characteristics:
+    - Topic: {request.topic}
+    - Current Progress: {json.dumps(request.current_progress)}
+    - Device Capabilities: {request.device_caps.json()}
+    
+    Include in your JSON response:
+    - recommended_content_order (list of content types)
+    - estimated_study_time (in hours)
+    - difficulty_progression (easy/medium/hard)
+    - language_suggestions (based on user preferences)
+    - offline_compatibility_notes
+    
+    Structure the response for a rural learner with limited connectivity.
+    """
+    
+    # Check cache first
+    cached = get_cached_response(prompt)
+    if cached and OFFLINE_MODE:
+        return json.loads(cached)
+    
+    try:
+        # Call Gemini API when online
+        response = await gemini_model.generate_content_async(prompt)
+        response_text = response.text
+        
+        # Cache the response for future offline use
+        if not OFFLINE_MODE:
+            cache_response(prompt, response_text)
+        
+        return json.loads(response_text)
+    except Exception as e:
+        if OFFLINE_MODE:
+            # Fallback to simple local recommendation algorithm
+            return generate_local_fallback_path(request)
+        raise HTTPException(status_code=500, detail=str(e))
+
+def generate_local_fallback_path(request: LearningRequest) -> Dict:
+    """Basic fallback when Gemini is unavailable"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    # Get user's learning profile
+    cursor.execute(
+        "SELECT learning_style, pace FROM learning_adaptation_profiles WHERE user_id=?",
+        (request.user_id,)
+    )
+    profile = cursor.fetchone()
+    
+    # Simple content prioritization
+    content_types = [ContentType.ARTICLE, ContentType.VIDEO, ContentType.EXERCISE]
+    if profile and profile[0] == "visual":
+        content_types = [ContentType.VIDEO, ContentType.ARTICLE, ContentType.EXERCISE]
+    
+    return {
+        "recommended_content_order": content_types,
+        "estimated_study_time": 2.5,
+        "difficulty_progression": "easy",
+        "language_suggestions": request.device_caps.preferred_languages[:1],
+        "offline_compatibility_notes": "Basic content types recommended for offline use"
+    }
+
+@app.post("/learning-path/generate")
+async def generate_learning_path(request: LearningRequest):
+    """Main endpoint for adaptive learning path generation"""
+    try:
+        recommendation = await get_adaptive_recommendation(request)
+        
+        # Store the updated learning profile
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT OR REPLACE INTO learning_adaptation_profiles 
+            VALUES (?, ?, ?, ?, ?)""",
+            (
+                request.user_id,
+                recommendation.get("learning_style", "mixed"),
+                recommendation.get("pace", "medium"),
+                json.dumps(request.current_progress),
+                datetime.now().isoformat()
+            )
+        )
+        conn.commit()
+        conn.close()
+        
+        return {
+            "recommendation": recommendation,
+            "generated_at": datetime.now().isoformat(),
+            "source": "gemini" if not OFFLINE_MODE else "offline_cache"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/content/optimize")
+async def optimize_content_for_device(content_id: str, device_caps: DeviceCapabilities):
+    """Optimize content delivery based on device capabilities"""
+    prompt = f"""
+    Suggest optimizations for content {content_id} given device constraints:
+    - Online: {device_caps.is_online}
+    - Bandwidth: {'low' if device_caps.has_low_bandwidth else 'high'}
+    - Storage: {device_caps.storage_available_mb}MB available
+    - Languages: {device_caps.preferred_languages}
+    
+    Provide recommendations for:
+    - Format (video compression, text alternatives)
+    - Download strategy (partial, progressive)
+    - Language alternatives
+    """
+    
+    try:
+        response = await gemini_model.generate_content_async(prompt)
+        return json.loads(response.text)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/assess-progress")
+async def assess_learning_progress(user_id: str, responses: Dict[str, List]):
+    """Evaluate user progress and adjust learning path"""
+    prompt = f"""
+    Analyze these learning assessment responses from user {user_id}:
+    {json.dumps(responses)}
+    
+    Identify:
+    - Strong areas
+    - Weak areas needing reinforcement
+    - Suggested content adjustments
+    - Pace adjustment recommendations
+    
+    Format as JSON with adaptive learning recommendations.
+    """
+    
+    try:
+        response = await gemini_model.generate_content_async(prompt)
+        result = json.loads(response.text)
+        
+        # Update user's adaptation profile
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE learning_adaptation_profiles SET knowledge_map=?, last_updated=? WHERE user_id=?",
+            (json.dumps(result.get("knowledge_map", {})), datetime.now().isoformat(), user_id)
+        )
+        conn.commit()
+        conn.close()
+        
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
