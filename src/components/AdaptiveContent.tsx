@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { AIService } from "@/services/AIService";
 import { Button } from "@/components/ui/button";
@@ -79,7 +80,7 @@ const AdaptiveContent = ({
       
       const response = await AIService.generateContent({
         prompt: enhancedPrompt,
-        language: currentLanguage,
+        language: { target: currentLanguage }, // Fixed: passing an object with target property
         mode: "adaptive-learning"
       });
       

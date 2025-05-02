@@ -10,6 +10,7 @@ import AdaptiveContent from "@/components/AdaptiveContent";
 import { useOffline } from "@/contexts/OfflineContext";
 import { AIService } from "@/services/AIService";
 import LanguageSelector from "@/components/LanguageSelector";
+import VoiceInput from "@/components/VoiceInput";
 
 // Mock course data
 const courses = [
