@@ -13,85 +13,67 @@ import {
 } from "@/components/ui/select";
 import CourseCard from "@/components/CourseCard";
 import VoiceInput from "@/components/VoiceInput";
-
-// Mock data
-const allCourses = [
-  {
-    id: "1",
-    title: "Web Development Fundamentals",
-    description: "Learn the basics of HTML, CSS, and JavaScript to build responsive websites",
-    image: "https://images.unsplash.com/photo-1498050108023-c5249f4df085?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=600&q=80",
-    category: "Technology",
-    duration: "4 weeks",
-    level: "Beginner",
-    language: "English",
-  },
-  {
-    id: "2",
-    title: "Digital Marketing Skills",
-    description: "Master social media, SEO, and content marketing strategies for business growth",
-    image: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=600&q=80",
-    category: "Marketing",
-    duration: "3 weeks",
-    level: "Intermediate",
-    language: "Hindi",
-  },
-  {
-    id: "3",
-    title: "Financial Literacy",
-    description: "Understand personal finance, savings, and investment strategies for a secure future",
-    image: "https://images.unsplash.com/photo-1591696205602-2f950c417cb9?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=600&q=80",
-    category: "Finance",
-    duration: "2 weeks",
-    level: "Beginner",
-    language: "Tamil",
-  },
-  {
-    id: "4",
-    title: "Mobile App Development",
-    description: "Build cross-platform mobile applications using React Native and Flutter",
-    image: "https://images.unsplash.com/photo-1551650975-87deedd944c3?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=600&q=80",
-    category: "Technology",
-    duration: "6 weeks",
-    level: "Intermediate",
-    language: "English",
-  },
-  {
-    id: "5",
-    title: "Business Communication",
-    description: "Enhance your professional communication skills for workplace success",
-    image: "https://images.unsplash.com/photo-1552581234-26160f608093?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=600&q=80",
-    category: "Business",
-    duration: "2 weeks",
-    level: "Beginner",
-    language: "English",
-  },
-  {
-    id: "6",
-    title: "Basic Computer Skills",
-    description: "Learn essential computer skills for daily use and workplace efficiency",
-    image: "https://images.unsplash.com/photo-1587614382346-4ec70e388b28?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=600&q=80",
-    category: "Technology",
-    duration: "1 week",
-    level: "Beginner",
-    language: "Telugu",
-  },
-];
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 const CourseCatalogPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
-  const [filteredCourses, setFilteredCourses] = useState(allCourses);
+  const [allCourses, setAllCourses] = useState<any[]>([]);
+  const [filteredCourses, setFilteredCourses] = useState<any[]>([]);
+  const [popularCourses, setPopularCourses] = useState<any[]>([]);
+  const [newCourses, setNewCourses] = useState<any[]>([]);
   const [isVoiceSearch, setIsVoiceSearch] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
+  
   const [filters, setFilters] = useState({
     category: "all",
     level: "all",
     language: "all",
   });
 
-  // Log when the component mounts
+  // Fetch courses from Supabase
   useEffect(() => {
-    console.log("Course Catalog Page mounted");
-  }, []);
+    const fetchCourses = async () => {
+      try {
+        setIsLoading(true);
+        
+        const { data, error } = await supabase
+          .from('courses')
+          .select('*');
+          
+        if (error) {
+          throw error;
+        }
+        
+        if (data) {
+          setAllCourses(data);
+          setFilteredCourses(data);
+          
+          // Set popular courses (could be based on enrollment count in a real app)
+          const popular = [...data].sort(() => 0.5 - Math.random()).slice(0, 3);
+          setPopularCourses(popular);
+          
+          // Set new courses (based on created_at)
+          const newest = [...data].sort((a, b) => 
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          ).slice(0, 3);
+          setNewCourses(newest);
+        }
+      } catch (error) {
+        console.error("Error fetching courses:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load courses",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchCourses();
+  }, [toast]);
 
   useEffect(() => {
     // Apply filters and search
@@ -103,8 +85,8 @@ const CourseCatalogPage = () => {
         result = result.filter(
           (course) =>
             course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            course.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            course.category.toLowerCase().includes(searchTerm.toLowerCase())
+            (course.description && course.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
+            (course.category && course.category.toLowerCase().includes(searchTerm.toLowerCase()))
         );
       }
       
@@ -116,17 +98,13 @@ const CourseCatalogPage = () => {
         result = result.filter((course) => course.level === filters.level);
       }
       
-      if (filters.language && filters.language !== "all") {
-        result = result.filter((course) => course.language === filters.language);
-      }
-      
       console.log("Filtered courses count:", result.length);
       setFilteredCourses(result);
     } catch (error) {
       console.error("Error filtering courses:", error);
       setFilteredCourses(allCourses); // Fall back to all courses
     }
-  }, [searchTerm, filters]);
+  }, [searchTerm, filters, allCourses]);
 
   const handleFilterChange = (key: string, value: string) => {
     console.log(`Changing filter ${key} to ${value}`);
@@ -254,10 +232,26 @@ const CourseCatalogPage = () => {
             </div>
           )}
           
-          {filteredCourses.length > 0 ? (
+          {isLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3, 4, 5, 6].map((item) => (
+                <div key={item} className="bg-gray-100 dark:bg-gray-800 animate-pulse h-64 rounded-lg"></div>
+              ))}
+            </div>
+          ) : filteredCourses.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredCourses.map((course) => (
-                <CourseCard key={course.id} {...course} />
+                <CourseCard 
+                  key={course.id} 
+                  id={course.id}
+                  title={course.title}
+                  description={course.description || ""}
+                  image={course.thumbnail_url || "https://images.unsplash.com/photo-1498050108023-c5249f4df085?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80"}
+                  category={course.category || "Uncategorized"}
+                  duration={course.duration ? `${course.duration} weeks` : "Self-paced"}
+                  level={course.level}
+                  language={"English"} // Default since we don't have this field yet
+                />
               ))}
             </div>
           ) : (
@@ -270,19 +264,55 @@ const CourseCatalogPage = () => {
         </TabsContent>
         
         <TabsContent value="popular">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {allCourses.slice(0, 3).map((course) => (
-              <CourseCard key={course.id} {...course} />
-            ))}
-          </div>
+          {isLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3].map((item) => (
+                <div key={item} className="bg-gray-100 dark:bg-gray-800 animate-pulse h-64 rounded-lg"></div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {popularCourses.map((course) => (
+                <CourseCard 
+                  key={course.id} 
+                  id={course.id}
+                  title={course.title}
+                  description={course.description || ""}
+                  image={course.thumbnail_url || "https://images.unsplash.com/photo-1498050108023-c5249f4df085?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80"}
+                  category={course.category || "Uncategorized"}
+                  duration={course.duration ? `${course.duration} weeks` : "Self-paced"}
+                  level={course.level}
+                  language={"English"}
+                />
+              ))}
+            </div>
+          )}
         </TabsContent>
         
         <TabsContent value="new">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {allCourses.slice(3, 6).map((course) => (
-              <CourseCard key={course.id} {...course} />
-            ))}
-          </div>
+          {isLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3].map((item) => (
+                <div key={item} className="bg-gray-100 dark:bg-gray-800 animate-pulse h-64 rounded-lg"></div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {newCourses.map((course) => (
+                <CourseCard 
+                  key={course.id} 
+                  id={course.id}
+                  title={course.title}
+                  description={course.description || ""}
+                  image={course.thumbnail_url || "https://images.unsplash.com/photo-1498050108023-c5249f4df085?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80"}
+                  category={course.category || "Uncategorized"}
+                  duration={course.duration ? `${course.duration} weeks` : "Self-paced"}
+                  level={course.level}
+                  language={"English"}
+                />
+              ))}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>

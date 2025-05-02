@@ -34,120 +34,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
-// Mock data for nearby hubs
-const nearbyHubs = [
-  {
-    id: "1",
-    name: "Bangalore Central Hub",
-    location: "MG Road, Bangalore",
-    members: 24,
-    distance: "1.2 km",
-    hasTrainer: true,
-    languages: ["English", "Kannada", "Hindi"],
-    isOnline: true,
-    icon: School,
-  },
-  {
-    id: "2",
-    name: "HSR Layout Learning Center",
-    location: "HSR Layout Sector 2, Bangalore",
-    members: 18,
-    distance: "3.5 km",
-    hasTrainer: true,
-    languages: ["English", "Tamil", "Hindi"],
-    isOnline: true,
-    icon: Building,
-  },
-  {
-    id: "3",
-    name: "Whitefield Community Hub",
-    location: "Whitefield, Bangalore",
-    members: 12,
-    distance: "8.7 km",
-    hasTrainer: false,
-    languages: ["English", "Hindi"],
-    isOnline: false,
-    icon: Landmark,
-  },
-  {
-    id: "4",
-    name: "Electronic City Peer Group",
-    location: "Electronic City Phase 1, Bangalore",
-    members: 15,
-    distance: "12.3 km",
-    hasTrainer: true,
-    languages: ["English", "Telugu", "Kannada"],
-    isOnline: true,
-    icon: GraduationCap,
-  },
-  {
-    id: "5",
-    name: "Koramangala Tech Hub",
-    location: "Koramangala 5th Block, Bangalore",
-    members: 20,
-    distance: "4.8 km",
-    hasTrainer: true,
-    languages: ["English", "Kannada"],
-    isOnline: true,
-    icon: School,
-  },
-  {
-    id: "6",
-    name: "Indiranagar Learning Group",
-    location: "Indiranagar 100ft Road, Bangalore",
-    members: 16,
-    distance: "5.2 km",
-    hasTrainer: false,
-    languages: ["English", "Hindi", "Tamil"],
-    isOnline: true,
-    icon: Building,
-  },
-  {
-    id: "7",
-    name: "Jayanagar Study Circle",
-    location: "Jayanagar 4th Block, Bangalore",
-    members: 14,
-    distance: "6.5 km",
-    hasTrainer: true,
-    languages: ["English", "Kannada"],
-    isOnline: true,
-    icon: Landmark,
-  },
-  {
-    id: "8",
-    name: "Malleshwaram Knowledge Center",
-    location: "Malleshwaram 8th Cross, Bangalore",
-    members: 22,
-    distance: "7.3 km",
-    hasTrainer: true,
-    languages: ["English", "Kannada", "Hindi"],
-    isOnline: false,
-    icon: GraduationCap,
-  }
-];
-
-// Mock user hub data
-const userHub = {
-  id: "1",
-  name: "Bangalore Central Hub",
-  joinedDate: "2025-04-15",
-  role: "member",
-  lastSync: "2025-04-29T10:30:00",
-  members: [
-    { id: "1", name: "Priya Singh", role: "trainer", online: true },
-    { id: "2", name: "Anand Kumar", role: "member", online: true },
-    { id: "3", name: "Deepika Verma", role: "member", online: false },
-    { id: "4", name: "Raj Malhotra", role: "member", online: true },
-    { id: "5", name: "Kiran Reddy", role: "member", online: true },
-    { id: "6", name: "Arjun Nair", role: "member", online: false },
-  ]
-};
+import { supabase } from "@/integrations/supabase/client";
 
 const VidyaHubPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
-  const [filteredHubs, setFilteredHubs] = useState(nearbyHubs);
-  const [userHubData, setUserHubData] = useState<typeof userHub | null>(null);
+  const [hubs, setHubs] = useState<any[]>([]);
+  const [filteredHubs, setFilteredHubs] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [userHubData, setUserHubData] = useState<any | null>(null);
   const [isJoiningHub, setIsJoiningHub] = useState(false);
   const [filterDistance, setFilterDistance] = useState("all");
   const [filterTrainer, setFilterTrainer] = useState("all");
@@ -155,24 +49,115 @@ const VidyaHubPage = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  // Check if user is already part of a hub
+  // Fetch hubs on component mount
   useEffect(() => {
-    const storedHubData = localStorage.getItem("vidya_user_hub");
-    if (storedHubData) {
-      setUserHubData(JSON.parse(storedHubData));
+    fetchHubs();
+    if (user?.id) {
+      fetchUserHubMembership();
     }
-  }, []);
+  }, [user?.id]);
+  
+  const fetchHubs = async () => {
+    try {
+      setIsLoading(true);
+      
+      const { data, error } = await supabase
+        .from('vidya_hubs')
+        .select('*');
+        
+      if (error) {
+        throw error;
+      }
+      
+      if (data) {
+        // Add mock distance and trainer data (would be calculated based on user location in real app)
+        const hubsWithExtraData = data.map(hub => ({
+          ...hub,
+          distance: `${(Math.random() * 15).toFixed(1)} km`,
+          hasTrainer: Math.random() > 0.3, // 70% chance of having a trainer
+          isOnline: Math.random() > 0.2, // 80% chance of being online
+          languages: ["English", "Hindi", ...(Math.random() > 0.5 ? ["Kannada"] : []), ...(Math.random() > 0.5 ? ["Tamil"] : [])],
+          icon: getRandomHubIcon(),
+          members: Math.floor(Math.random() * 30) + 5
+        }));
+        
+        setHubs(hubsWithExtraData);
+        setFilteredHubs(hubsWithExtraData);
+      }
+    } catch (error) {
+      console.error("Error fetching hubs:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load hubs",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const fetchUserHubMembership = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('hub_visits')
+        .select(`
+          *,
+          hub:vidya_hubs(*)
+        `)
+        .eq('user_id', user?.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+        
+      if (error) {
+        throw error;
+      }
+      
+      if (data && data.length > 0) {
+        // Mock additional hub data that might come from other tables in a real implementation
+        const hubVisit = data[0];
+        
+        const hubData = {
+          id: hubVisit.hub_id,
+          name: hubVisit.hub.name,
+          joinedDate: new Date(hubVisit.created_at).toISOString().split('T')[0],
+          role: "member",
+          lastSync: new Date().toISOString(),
+          // Mock hub members - would be fetched from database in real app
+          members: [
+            { id: "1", name: "Priya Singh", role: "trainer", online: true },
+            { id: "2", name: "Anand Kumar", role: "member", online: true },
+            { id: "3", name: "Deepika Verma", role: "member", online: false },
+            { id: "4", name: "Raj Malhotra", role: "member", online: true },
+            { id: "5", name: "Kiran Reddy", role: "member", online: true },
+            { id: "6", name: "Arjun Nair", role: "member", online: false },
+          ]
+        };
+        
+        setUserHubData(hubData);
+      }
+    } catch (error) {
+      console.error("Error fetching user hub membership:", error);
+    }
+  };
+  
+  const getRandomHubIcon = () => {
+    const icons = [School, Building, Landmark, GraduationCap];
+    return icons[Math.floor(Math.random() * icons.length)];
+  };
 
   // Filter hubs based on search term and filters
   useEffect(() => {
-    let filtered = nearbyHubs;
+    if (!hubs.length) return;
+    
+    let filtered = [...hubs];
     
     // Apply search filter
     if (searchTerm) {
       filtered = filtered.filter(
         hub => 
           hub.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          hub.location.toLowerCase().includes(searchTerm.toLowerCase())
+          hub.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (hub.description && hub.description.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
     
@@ -204,54 +189,108 @@ const VidyaHubPage = () => {
     }
     
     setFilteredHubs(filtered);
-  }, [searchTerm, filterDistance, filterTrainer]);
+  }, [searchTerm, filterDistance, filterTrainer, hubs]);
 
-  const handleJoinHub = (hubId: string) => {
+  const handleJoinHub = async (hubId: string) => {
+    if (!user?.id) {
+      toast({
+        title: "Authentication Required",
+        description: "Please login to join a hub",
+      });
+      navigate("/auth/login");
+      return;
+    }
+    
     setIsJoiningHub(true);
     
-    // Find the hub data
-    const selectedHub = nearbyHubs.find(hub => hub.id === hubId);
-    
-    // Simulate API call to join hub
-    setTimeout(() => {
+    try {
+      // Find the hub data
+      const selectedHub = hubs.find(hub => hub.id === hubId);
+      
       if (selectedHub) {
-        const hubData = {
-          id: selectedHub.id,
-          name: selectedHub.name,
-          joinedDate: new Date().toISOString().split('T')[0],
-          role: "member",
-          lastSync: new Date().toISOString(),
-          members: [
-            { id: "1", name: "Priya Singh", role: "trainer", online: true },
-            { id: "2", name: "Anand Kumar", role: "member", online: true },
-            { id: "3", name: "Deepika Verma", role: "member", online: false },
-            { id: "4", name: "Raj Malhotra", role: "member", online: true },
-            { id: "5", name: "Kiran Reddy", role: "member", online: true },
-            { id: "6", name: "Arjun Nair", role: "member", online: false },
-          ]
-        };
+        // Create hub_visit record in Supabase
+        const { data, error } = await supabase
+          .from('hub_visits')
+          .insert({
+            hub_id: hubId,
+            user_id: user.id,
+            status: 'active'
+          })
+          .select();
+          
+        if (error) {
+          throw error;
+        }
         
-        // Save to localStorage
-        localStorage.setItem("vidya_user_hub", JSON.stringify(hubData));
-        setUserHubData(hubData);
-        
-        toast({
-          title: "Success",
-          description: `You have joined ${selectedHub.name}`,
-        });
+        if (data) {
+          // Create hub data based on the new visit and the selected hub
+          const hubData = {
+            id: selectedHub.id,
+            name: selectedHub.name,
+            joinedDate: new Date().toISOString().split('T')[0],
+            role: "member",
+            lastSync: new Date().toISOString(),
+            members: [
+              { id: "1", name: "Priya Singh", role: "trainer", online: true },
+              { id: "2", name: "Anand Kumar", role: "member", online: true },
+              { id: "3", name: "Deepika Verma", role: "member", online: false },
+              { id: "4", name: "Raj Malhotra", role: "member", online: true },
+              { id: "5", name: "Kiran Reddy", role: "member", online: true },
+              { id: "6", name: "Arjun Nair", role: "member", online: false },
+            ]
+          };
+          
+          setUserHubData(hubData);
+          
+          toast({
+            title: "Success",
+            description: `You have joined ${selectedHub.name}`,
+          });
+        }
       }
+    } catch (error) {
+      console.error("Error joining hub:", error);
+      toast({
+        title: "Error",
+        description: "Failed to join hub",
+        variant: "destructive",
+      });
+    } finally {
       setIsJoiningHub(false);
-    }, 1500);
+    }
   };
 
-  const handleLeaveHub = () => {
-    localStorage.removeItem("vidya_user_hub");
-    setUserHubData(null);
+  const handleLeaveHub = async () => {
+    if (!user?.id || !userHubData?.id) {
+      return;
+    }
     
-    toast({
-      title: "Success",
-      description: "You have left the hub",
-    });
+    try {
+      // Delete hub_visit record from Supabase
+      const { error } = await supabase
+        .from('hub_visits')
+        .delete()
+        .eq('hub_id', userHubData.id)
+        .eq('user_id', user.id);
+        
+      if (error) {
+        throw error;
+      }
+      
+      setUserHubData(null);
+      
+      toast({
+        title: "Success",
+        description: "You have left the hub",
+      });
+    } catch (error) {
+      console.error("Error leaving hub:", error);
+      toast({
+        title: "Error",
+        description: "Failed to leave hub",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleMessageTrainer = () => {
@@ -274,7 +313,6 @@ const VidyaHubPage = () => {
           ...userHubData,
           lastSync: new Date().toISOString()
         };
-        localStorage.setItem("vidya_user_hub", JSON.stringify(updatedHubData));
         setUserHubData(updatedHubData);
         
         toast({
@@ -285,12 +323,45 @@ const VidyaHubPage = () => {
     }, 2000);
   };
 
-  const handleScheduleVisit = (hubId: string) => {
-    const hub = nearbyHubs.find(h => h.id === hubId);
-    if (hub) {
+  const handleScheduleVisit = async (hubId: string) => {
+    if (!user?.id) {
       toast({
-        title: "Visit Scheduled",
-        description: `Your visit to ${hub.name} has been scheduled. A confirmation will be sent to your email.`,
+        title: "Authentication Required",
+        description: "Please login to schedule a visit",
+      });
+      navigate("/auth/login");
+      return;
+    }
+    
+    try {
+      const hub = hubs.find(h => h.id === hubId);
+      
+      if (hub) {
+        // Create hub_visit record with scheduled status
+        const { data, error } = await supabase
+          .from('hub_visits')
+          .insert({
+            hub_id: hubId,
+            user_id: user.id,
+            status: 'scheduled'
+          })
+          .select();
+          
+        if (error) {
+          throw error;
+        }
+        
+        toast({
+          title: "Visit Scheduled",
+          description: `Your visit to ${hub.name} has been scheduled. A confirmation will be sent to your email.`,
+        });
+      }
+    } catch (error) {
+      console.error("Error scheduling visit:", error);
+      toast({
+        title: "Error",
+        description: "Failed to schedule visit",
+        variant: "destructive",
       });
     }
   };
@@ -304,10 +375,16 @@ const VidyaHubPage = () => {
   };
 
   return (
-    <div className="page-container py-6">
+    <div className="page-container py-6 container mx-auto px-4">
       <h1 className="text-2xl md:text-3xl font-bold mb-6">Vidya Hubs</h1>
       
-      {userHubData ? (
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[1, 2, 3, 4].map((item) => (
+            <div key={item} className="bg-gray-100 dark:bg-gray-800 animate-pulse h-48 rounded-lg"></div>
+          ))}
+        </div>
+      ) : userHubData ? (
         <div className="space-y-6">
           <Card>
             <CardHeader>
@@ -328,12 +405,12 @@ const VidyaHubPage = () => {
                 <div>
                   <h3 className="font-medium mb-3">Hub Members</h3>
                   <div className="space-y-3">
-                    {userHubData.members.map((member) => (
+                    {userHubData.members.map((member: any) => (
                       <div key={member.id} className="flex items-center justify-between p-3 rounded-md bg-muted/40">
                         <div className="flex items-center gap-3">
                           <Avatar className="h-8 w-8">
                             <AvatarFallback className="bg-primary/10 text-primary">
-                              {member.name.split(' ').map(n => n[0]).join('')}
+                              {member.name.split(' ').map((n: string) => n[0]).join('')}
                             </AvatarFallback>
                           </Avatar>
                           <div>
@@ -568,7 +645,7 @@ const VidyaHubPage = () => {
                             </div>
                           </div>
                           <div className="mt-2 flex flex-wrap gap-1">
-                            {hub.languages.map((lang) => (
+                            {hub.languages.map((lang: string) => (
                               <Badge key={lang} variant="secondary" className="text-xs">
                                 {lang}
                               </Badge>

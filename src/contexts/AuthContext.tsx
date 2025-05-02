@@ -1,6 +1,7 @@
 
 import React, { createContext, useState, useContext, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 
 type User = {
   id: string;
@@ -29,82 +30,114 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // Check for existing session on mount
   useEffect(() => {
     console.log("Checking auth state on mount");
-    const checkAuth = () => {
+    const checkAuth = async () => {
       try {
-        const storedUser = localStorage.getItem("vidya_user");
-        const storedProfile = localStorage.getItem("vidya_user_profile");
+        setIsLoading(true);
+        // Get session from supabase
+        const { data: { session } } = await supabase.auth.getSession();
         
-        if (storedUser) {
-          console.log("Found stored user data:", storedUser);
-          const parsedUser = JSON.parse(storedUser);
+        if (session?.user) {
+          console.log("Found active session:", session.user.id);
           
-          // If user has completed profile setup, merge that data
-          if (storedProfile) {
-            console.log("Found stored profile data:", storedProfile);
-            const profile = JSON.parse(storedProfile);
+          // Fetch user profile from profiles table
+          const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+            
+          if (error) {
+            console.error("Error fetching profile:", error);
+            throw error;
+          }
+          
+          if (profile) {
             setUser({
-              id: parsedUser.id || crypto.randomUUID(),
-              email: parsedUser.email,
-              name: profile.fullName,
-              profileCompleted: true
+              id: session.user.id,
+              email: session.user.email || '',
+              name: profile.name,
+              profileCompleted: profile.profile_completed || false
             });
             console.log("User authenticated with profile");
           } else {
             setUser({
-              id: parsedUser.id || crypto.randomUUID(),
-              email: parsedUser.email,
+              id: session.user.id,
+              email: session.user.email || '',
               profileCompleted: false
             });
             console.log("User authenticated without profile");
           }
         } else {
-          console.log("No stored user data found");
+          console.log("No active session found");
+          setUser(null);
         }
       } catch (error) {
         console.error("Error checking authentication:", error);
-        localStorage.removeItem("vidya_user");
-        localStorage.removeItem("vidya_user_profile");
+        setUser(null);
       } finally {
         setIsLoading(false);
       }
     };
 
     checkAuth();
+    
+    // Set up auth state change listener
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log("Auth state changed:", event);
+        if (event === 'SIGNED_IN' && session) {
+          // Fetch user profile
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+            
+          setUser({
+            id: session.user.id,
+            email: session.user.email || '',
+            name: profile?.name,
+            profileCompleted: profile?.profile_completed || false
+          });
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null);
+        }
+      }
+    );
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     
     try {
-      // In a real app, this would be an API call to your backend
-      await new Promise(resolve => setTimeout(resolve, 800));
+      const { data, error } = await supabase.auth.signInWithPassword({ 
+        email, 
+        password 
+      });
       
-      // Mock successful login - store basic user info
-      const userId = crypto.randomUUID();
-      const userData = { id: userId, email };
+      if (error) {
+        throw error;
+      }
       
-      // Important: Save to localStorage before updating state
-      localStorage.setItem("vidya_user", JSON.stringify(userData));
-      console.log("Saved user data to localStorage:", userData);
-      
-      // Check if user has completed profile setup
-      const storedProfile = localStorage.getItem("vidya_user_profile");
-      if (storedProfile) {
-        const profile = JSON.parse(storedProfile);
-        setUser({
-          ...userData,
-          name: profile.fullName,
-          profileCompleted: true
-        });
-        navigate("/");
-        console.log("User logged in with existing profile");
-      } else {
-        setUser({
-          ...userData,
-          profileCompleted: false
-        });
-        navigate("/auth/profile-setup");
-        console.log("User logged in, redirecting to profile setup");
+      if (data.user) {
+        // Fetch user profile
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
+        
+        if (profile?.profile_completed) {
+          navigate("/");
+          console.log("User logged in with existing profile");
+        } else {
+          navigate("/auth/profile-setup");
+          console.log("User logged in, redirecting to profile setup");
+        }
       }
 
       return Promise.resolve();
@@ -120,24 +153,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setIsLoading(true);
     
     try {
-      // Mock API call
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      // In a real app, this would call your backend API to create the user
-      const userId = crypto.randomUUID();
-      const userData = { id: userId, email };
-      
-      // Important: Save to localStorage before updating state
-      localStorage.setItem("vidya_user", JSON.stringify(userData));
-      console.log("Saved new user data to localStorage:", userData);
-      
-      // Set minimal user data
-      setUser({
-        id: userId,
+      // Register new user
+      const { data, error } = await supabase.auth.signUp({
         email,
-        name,
-        profileCompleted: false
+        password,
+        options: {
+          data: {
+            name
+          }
+        }
       });
+      
+      if (error) {
+        throw error;
+      }
       
       console.log("User signed up successfully");
       navigate("/auth/profile-setup"); // Explicitly navigate to profile setup
@@ -150,35 +179,40 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
     console.log("Logging out user");
-    localStorage.removeItem("vidya_user");
-    // We don't remove the profile data on logout to persist it for future logins
+    await supabase.auth.signOut();
     setUser(null);
     navigate("/auth/login");
   };
   
-  const updateUserProfile = (data: Partial<User>) => {
+  const updateUserProfile = async (data: Partial<User>) => {
     if (user) {
-      const updatedUser = { ...user, ...data, profileCompleted: true };
-      setUser(updatedUser);
-      
-      const storedProfile = {
-        fullName: updatedUser.name,
-        // Add other profile fields as needed
-      };
-      
-      // Save both user and profile data
-      localStorage.setItem("vidya_user", JSON.stringify({
-        id: updatedUser.id,
-        email: updatedUser.email
-      }));
-      
-      localStorage.setItem("vidya_user_profile", JSON.stringify(storedProfile));
-      console.log("User profile updated and saved to localStorage:", updatedUser, storedProfile);
-      
-      // Redirect to home after profile is completed
-      navigate("/");
+      try {
+        // Update profile in Supabase
+        const { error } = await supabase
+          .from('profiles')
+          .update({
+            name: data.name,
+            profile_completed: true
+            // Add other profile fields as needed
+          })
+          .eq('id', user.id);
+          
+        if (error) {
+          throw error;
+        }
+        
+        const updatedUser = { ...user, ...data, profileCompleted: true };
+        setUser(updatedUser);
+        
+        console.log("User profile updated in Supabase:", updatedUser);
+        
+        // Redirect to home after profile is completed
+        navigate("/");
+      } catch (err) {
+        console.error("Error updating profile:", err);
+      }
     }
   };
 
