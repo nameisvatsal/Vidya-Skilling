@@ -21,6 +21,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import VoiceInput from "@/components/VoiceInput";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 const educationLevels = [
   "High School",
@@ -73,14 +74,26 @@ const UserProfileSetupPage = () => {
   ) => {
     const { name, value } = "target" in e ? e.target : e;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    
+    // Save to local storage as user types
+    const updatedData = { ...formData, [name]: value };
+    localStorage.setItem("vidya_user_profile", JSON.stringify(updatedData));
   };
 
   const handleSelectChange = (name: string, value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
+    
+    // Save to local storage when selection changes
+    const updatedData = { ...formData, [name]: value };
+    localStorage.setItem("vidya_user_profile", JSON.stringify(updatedData));
   };
 
   const handleVoiceInput = (text: string) => {
     setFormData((prev) => ({ ...prev, goals: text }));
+    
+    // Save to local storage when voice input is received
+    const updatedData = { ...formData, goals: text };
+    localStorage.setItem("vidya_user_profile", JSON.stringify(updatedData));
   };
 
   const handleNext = () => {
@@ -115,17 +128,44 @@ const UserProfileSetupPage = () => {
     try {
       console.log("Submitting profile data:", formData);
       
-      // Update user profile with the form data
+      // Save profile data to Supabase
+      if (!user) {
+        throw new Error("No authenticated user found");
+      }
+      
+      const { error } = await supabase.from('profiles').upsert({
+        id: user.id,
+        name: formData.fullName,
+        location: formData.location,
+        education: formData.education,
+        preferred_language: formData.preferredLanguage,
+        interests: formData.interests,
+        phone: formData.phone,
+        goals: formData.goals,
+        profile_completed: true
+      });
+      
+      if (error) {
+        throw error;
+      }
+      
+      // Update auth context
       updateUserProfile({ 
         name: formData.fullName,
+        profileCompleted: true
       });
+      
+      // Clear local storage after successful submission
+      localStorage.removeItem("vidya_user_profile");
       
       toast({
         title: "Success",
         description: "Profile setup completed",
       });
       
-      // Redirect is handled in updateUserProfile
+      // Explicitly navigate to home
+      navigate("/");
+      
     } catch (error) {
       console.error("Profile setup error:", error);
       setFormError("Failed to save profile. Please try again.");
