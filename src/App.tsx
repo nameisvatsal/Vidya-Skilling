@@ -44,9 +44,9 @@ function App() {
               <Route path="courses/:id/module/:moduleId" element={<ModulePlayerPage />} />
               
               {/* Credential Routes */}
-              <Route path="certificates/:id" element={<CertificateViewPage />} />
-              <Route path="verify" element={<CredentialVerifyPage />} />
-              <Route path="portfolio" element={<MyPortfolioPage />} />
+              <Route path="credentials" element={<MyPortfolioPage />} />
+              <Route path="credentials/:id" element={<CertificateViewPage />} />
+              <Route path="credentials/verify" element={<CredentialVerifyPage />} />
               
               {/* Progress Routes */}
               <Route path="progress" element={<ProgressDashboardPage />} />
