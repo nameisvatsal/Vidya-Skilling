@@ -35,12 +35,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const storedProfile = localStorage.getItem("vidya_user_profile");
         
         if (storedUser) {
-          console.log("Found stored user data");
+          console.log("Found stored user data:", storedUser);
           const parsedUser = JSON.parse(storedUser);
           
           // If user has completed profile setup, merge that data
           if (storedProfile) {
-            console.log("Found stored profile data");
+            console.log("Found stored profile data:", storedProfile);
             const profile = JSON.parse(storedProfile);
             setUser({
               id: parsedUser.id || crypto.randomUUID(),
@@ -140,6 +140,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       });
       
       console.log("User signed up successfully");
+      navigate("/auth/profile-setup"); // Explicitly navigate to profile setup
       return Promise.resolve();
     } catch (error) {
       console.error("Signup error:", error);
@@ -167,13 +168,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         // Add other profile fields as needed
       };
       
+      // Save both user and profile data
       localStorage.setItem("vidya_user", JSON.stringify({
         id: updatedUser.id,
         email: updatedUser.email
       }));
       
       localStorage.setItem("vidya_user_profile", JSON.stringify(storedProfile));
-      console.log("User profile updated and saved to localStorage");
+      console.log("User profile updated and saved to localStorage:", updatedUser, storedProfile);
+      
+      // Redirect to home after profile is completed
+      navigate("/");
     }
   };
 

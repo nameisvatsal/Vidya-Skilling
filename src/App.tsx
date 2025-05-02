@@ -15,6 +15,7 @@ import UserProfileSetupPage from "./pages/auth/UserProfileSetupPage";
 
 // Main pages
 import HomePage from "./pages/HomePage";
+import ProfilePage from "./pages/ProfilePage";
 import CourseCatalogPage from "./pages/courses/CourseCatalogPage";
 import CourseDetailPage from "./pages/courses/CourseDetailPage";
 import ModulePlayerPage from "./pages/courses/ModulePlayerPage";
@@ -95,6 +96,9 @@ const App = () => {
               }>
                 {/* Home */}
                 <Route path="/" element={<HomePage />} />
+                
+                {/* Profile */}
+                <Route path="/profile" element={<ProfilePage />} />
                 
                 {/* Course routes */}
                 <Route path="/courses" element={<CourseCatalogPage />} />

@@ -56,7 +56,7 @@ const Header = ({ isDarkMode, toggleDarkMode }: HeaderProps) => {
             <Bell size={20} />
           </Button>
           
-          <Link to="/credentials">
+          <Link to="/profile">
             <Button variant="ghost" size="icon" className="text-gray-700 dark:text-gray-200">
               <User size={20} />
             </Button>
@@ -104,6 +104,13 @@ const Header = ({ isDarkMode, toggleDarkMode }: HeaderProps) => {
               onClick={() => setIsMenuOpen(false)}
             >
               Vidya Hubs
+            </Link>
+            <Link 
+              to="/profile" 
+              className="text-gray-700 dark:text-gray-200 hover:text-vidya-primary dark:hover:text-vidya-secondary py-2"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Profile
             </Link>
             <Link 
               to="/languages" 

@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,6 +51,23 @@ const UserProfileSetupPage = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
+  // Load any existing profile data
+  useEffect(() => {
+    const storedProfile = localStorage.getItem("vidya_user_profile");
+    if (storedProfile) {
+      try {
+        const profileData = JSON.parse(storedProfile);
+        setFormData(prev => ({
+          ...prev,
+          ...profileData
+        }));
+        console.log("Loaded existing profile data:", profileData);
+      } catch (error) {
+        console.error("Error parsing stored profile:", error);
+      }
+    }
+  }, []);
+
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | { name: string; value: string }
   ) => {
@@ -96,21 +113,21 @@ const UserProfileSetupPage = () => {
     setIsLoading(true);
     
     try {
+      console.log("Submitting profile data:", formData);
+      
       // Update user profile with the form data
       updateUserProfile({ 
         name: formData.fullName,
       });
-      
-      // Save comprehensive profile data to localStorage
-      localStorage.setItem("vidya_user_profile", JSON.stringify(formData));
       
       toast({
         title: "Success",
         description: "Profile setup completed",
       });
       
-      navigate("/");
+      // Redirect is handled in updateUserProfile
     } catch (error) {
+      console.error("Profile setup error:", error);
       setFormError("Failed to save profile. Please try again.");
       toast({
         title: "Error",
