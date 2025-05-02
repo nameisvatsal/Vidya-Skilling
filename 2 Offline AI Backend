@@ -1,0 +1,263 @@
+import sqlite3  # Lightweight offline database
+from pathlib import Path
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import List, Optional, Dict
+import hashlib
+import json
+from datetime import datetime
+import os
+from enum import Enum
+import zipfile
+import tempfile
+
+# For multilingual support (would use Whisper & IndicTrans2 in production)
+try:
+    import whisper  # OpenAI Whisper for STT
+    import indic_trans  # IndicTrans2 for translation
+except ImportError:
+    print("Warning: Voice processing libraries not available")
+
+app = FastAPI(title="Vidya Offline Backend", version="3.0")
+
+# Constants
+CONTENT_CACHE_DIR = Path("./content_cache")
+MODELS_DIR = Path("./models")
+DB_PATH = Path("./vidya_offline.db")
+
+# Initialize offline database
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        profile_json TEXT,
+        last_sync TEXT
+    )
+    """)
+    
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS content (
+        id TEXT PRIMARY KEY,
+        type TEXT,
+        metadata_json TEXT,
+        local_path TEXT,
+        hash TEXT
+    )
+    """)
+    
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS progress (
+        user_id TEXT,
+        content_id TEXT,
+        completion REAL,
+        last_accessed TEXT,
+        PRIMARY KEY (user_id, content_id)
+    )
+    """)
+    
+    conn.commit()
+    conn.close()
+
+init_db()
+
+class ContentType(str, Enum):
+    VIDEO = "video"
+    PDF = "pdf"
+    QUIZ = "quiz"
+    AUDIO = "audio"
+
+class DeviceProfile(BaseModel):
+    device_id: str
+    ram_mb: int
+    storage_mb: int
+    network_status: str  # "offline", "low-bandwidth", "online"
+    preferred_languages: List[str]
+
+class LearningRequest(BaseModel):
+    user_id: str
+    topic: str
+    device_profile: DeviceProfile
+    last_sync_time: Optional[datetime] = None
+
+class OfflineContentPackage(BaseModel):
+    content_ids: List[str]
+    format: str = "zip"  # or "tar", "json"
+
+# Lightweight LLM (would use TinyLLM or similar in production)
+class LiteLLM:
+    def __init__(self, model_path: Path):
+        self.model_loaded = False
+        self.model_path = model_path
+        
+    def load_model(self):
+        """Mock model loading - in reality would load a small LLM"""
+        self.model_loaded = True
+        
+    def generate(self, prompt: str, max_tokens=100) -> str:
+        if not self.model_loaded:
+            self.load_model()
+        
+        # Mock response - real implementation would use the model
+        return f"Mock response to: {prompt[:20]}..."
+
+# Initialize our lightweight LLM
+lite_llm = LiteLLM(MODELS_DIR / "tinyllm.bin")
+
+@app.post("/sync/check")
+async def check_sync_updates(user_id: str, last_sync: datetime):
+    """Minimal sync check endpoint for low bandwidth"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+    SELECT COUNT(*) FROM content 
+    WHERE datetime(?) < datetime(last_updated)
+    """, (last_sync.isoformat(),))
+    
+    update_count = cursor.fetchone()[0]
+    conn.close()
+    
+    return {
+        "needs_update": update_count > 0,
+        "update_size_kb": update_count * 50  # Estimate
+    }
+
+@app.post("/content/request-offline")
+async def request_offline_package(request: LearningRequest):
+    """Prepares content package optimized for offline use"""
+    try:
+        # 1. Select appropriate content based on device capabilities
+        content = select_content_for_device(
+            request.topic, 
+            request.device_profile
+        )
+        
+        # 2. Prepare offline package
+        package_path = create_offline_package(content, request.device_profile)
+        
+        return {
+            "package_url": f"/download/{package_path.name}",
+            "size_mb": os.path.getsize(package_path) / (1024*1024),
+            "content_types": list(set(c['type'] for c in content))
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/learning-path/generate-light")
+async def generate_lightweight_path(request: LearningRequest):
+    """Generates learning path using lightweight LLM"""
+    try:
+        # Get user profile from local DB
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT profile_json FROM users WHERE id=?", (request.user_id,))
+        user_profile = json.loads(cursor.fetchone()[0])
+        conn.close()
+        
+        # Generate with local LLM
+        prompt = f"""
+        Create learning path for {request.topic} with constraints:
+        - Device: {request.device_profile.ram_mb}MB RAM
+        - Network: {request.device_profile.network_status}
+        - Languages: {request.device_profile.preferred_languages}
+        
+        User profile: {user_profile}
+        
+        Return JSON with:
+        - content_order (list of content IDs)
+        - estimated_duration
+        - offline_compatible (bool)
+        """
+        
+        response = lite_llm.generate(prompt)
+        return json.loads(response)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/transcribe")
+async def transcribe_audio(audio_data: bytes, language: str = "hi"):
+    """Audio transcription endpoint for regional languages"""
+    try:
+        # In production would use Whisper and IndicTrans2
+        # This is a mock implementation
+        
+        # Save to temp file (mock)
+        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+            tmp.write(audio_data)
+            tmp_path = tmp.name
+        
+        # Mock transcription
+        transcript = "मॉक ट्रांस्क्रिप्शन: यह हिंदी में एक उदाहरण है"
+        
+        # Mock translation if needed
+        if language != "en":
+            translation = "Mock transcription: This is an example in Hindi"
+        else:
+            translation = transcript
+            
+        return {
+            "original_text": transcript,
+            "translation": translation,
+            "language": language
+        }
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+# Helper functions
+def select_content_for_device(topic: str, device: DeviceProfile) -> List[Dict]:
+    """Selects content appropriate for device capabilities"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    query = """
+    SELECT id, type, metadata_json, local_path 
+    FROM content 
+    WHERE json_extract(metadata_json, '$.topics') LIKE ? 
+    AND json_extract(metadata_json, '$.size_mb') <= ?
+    """
+    
+    max_size = 5 if device.network_status == "low-bandwidth" else 50
+    cursor.execute(query, (f"%{topic}%", max_size))
+    
+    results = []
+    for row in cursor.fetchall():
+        content_id, type, metadata, path = row
+        results.append({
+            "id": content_id,
+            "type": type,
+            "metadata": json.loads(metadata),
+            "path": path
+        })
+    
+    conn.close()
+    return results
+
+def create_offline_package(content: List[Dict], device: DeviceProfile) -> Path:
+    """Creates optimized offline content package"""
+    package_path = CONTENT_CACHE_DIR / f"package_{datetime.now().timestamp()}.zip"
+    
+    with zipfile.ZipFile(package_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for item in content:
+            # Add content file
+            if os.path.exists(item['path']):
+                zipf.write(item['path'], os.path.basename(item['path']))
+            
+            # Add metadata
+            zipf.writestr(
+                f"{item['id']}.meta",
+                json.dumps(item['metadata'])
+            )
+    
+    return package_path
+
+# Startup tasks
+if not CONTENT_CACHE_DIR.exists():
+    CONTENT_CACHE_DIR.mkdir()
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
