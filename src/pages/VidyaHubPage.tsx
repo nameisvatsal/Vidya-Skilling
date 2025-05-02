@@ -11,7 +11,9 @@ import {
   Building,
   School,
   GraduationCap,
-  Landmark
+  Landmark,
+  Navigation,
+  NavigationOff
 } from "lucide-react";
 import { 
   Card, 
@@ -35,6 +37,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
+import { mockHubs } from "@/mocks/hubsData";
+import { VidyaHub } from "@/integrations/supabase/schema";
 
 const VidyaHubPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -45,6 +49,7 @@ const VidyaHubPage = () => {
   const [isJoiningHub, setIsJoiningHub] = useState(false);
   const [filterDistance, setFilterDistance] = useState("all");
   const [filterTrainer, setFilterTrainer] = useState("all");
+  const [filterState, setFilterState] = useState("all");
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -69,21 +74,29 @@ const VidyaHubPage = () => {
         throw error;
       }
       
-      if (data) {
-        // Add mock distance and trainer data (would be calculated based on user location in real app)
-        const hubsWithExtraData = data.map(hub => ({
-          ...hub,
-          distance: `${(Math.random() * 15).toFixed(1)} km`,
-          hasTrainer: Math.random() > 0.3, // 70% chance of having a trainer
-          isOnline: Math.random() > 0.2, // 80% chance of being online
-          languages: ["English", "Hindi", ...(Math.random() > 0.5 ? ["Kannada"] : []), ...(Math.random() > 0.5 ? ["Tamil"] : [])],
-          icon: getRandomHubIcon(),
-          members: Math.floor(Math.random() * 30) + 5
-        }));
-        
-        setHubs(hubsWithExtraData);
-        setFilteredHubs(hubsWithExtraData);
+      let hubsData;
+      
+      // If no data is returned from Supabase, use the mock data
+      if (!data || data.length === 0) {
+        hubsData = mockHubs;
+        console.log("Using mock hub data since Supabase returned empty results");
+      } else {
+        hubsData = data;
       }
+      
+      // Add mock distance and trainer data (would be calculated based on user location in real app)
+      const hubsWithExtraData = hubsData.map(hub => ({
+        ...hub,
+        distance: `${(Math.random() * 15).toFixed(1)} km`,
+        hasTrainer: Math.random() > 0.3, // 70% chance of having a trainer
+        isOnline: Math.random() > 0.2, // 80% chance of being online
+        languages: ["English", "Hindi", ...(Math.random() > 0.5 ? ["Kannada"] : []), ...(Math.random() > 0.5 ? ["Tamil"] : [])],
+        icon: getRandomHubIcon(),
+        members: Math.floor(Math.random() * 30) + 5
+      }));
+      
+      setHubs(hubsWithExtraData);
+      setFilteredHubs(hubsWithExtraData);
     } catch (error) {
       console.error("Error fetching hubs:", error);
       toast({
@@ -91,9 +104,38 @@ const VidyaHubPage = () => {
         description: "Failed to load hubs",
         variant: "destructive",
       });
+      
+      // Use mock data as fallback in case of error
+      const hubsWithExtraData = mockHubs.map(hub => ({
+        ...hub,
+        distance: `${(Math.random() * 15).toFixed(1)} km`,
+        hasTrainer: Math.random() > 0.3,
+        isOnline: Math.random() > 0.2,
+        languages: ["English", "Hindi", ...(Math.random() > 0.5 ? ["Kannada"] : []), ...(Math.random() > 0.5 ? ["Tamil"] : [])],
+        icon: getRandomHubIcon(),
+        members: Math.floor(Math.random() * 30) + 5
+      }));
+      
+      setHubs(hubsWithExtraData);
+      setFilteredHubs(hubsWithExtraData);
     } finally {
       setIsLoading(false);
     }
+  };
+  
+  // Get available states for filtering
+  const getAvailableStates = () => {
+    const states = hubs.map(hub => {
+      // Extract state from location (assuming format "Rural StateName")
+      const location = hub.location || "";
+      if (location.startsWith("Rural ")) {
+        return location.substring(6); // Remove "Rural " prefix
+      }
+      return location;
+    });
+    
+    // Return unique states
+    return [...new Set(states)].sort();
   };
   
   const fetchUserHubMembership = async () => {
@@ -141,7 +183,7 @@ const VidyaHubPage = () => {
   };
   
   const getRandomHubIcon = () => {
-    const icons = [School, Building, Landmark, GraduationCap];
+    const icons = [School, Building, Landmark, GraduationCap, Navigation];
     return icons[Math.floor(Math.random() * icons.length)];
   };
 
@@ -188,8 +230,18 @@ const VidyaHubPage = () => {
       });
     }
     
+    // Apply state filter
+    if (filterState !== "all") {
+      filtered = filtered.filter(hub => {
+        // Extract state from location for comparison
+        const hubState = hub.location.startsWith("Rural ") ? 
+          hub.location.substring(6) : hub.location;
+        return hubState === filterState;
+      });
+    }
+    
     setFilteredHubs(filtered);
-  }, [searchTerm, filterDistance, filterTrainer, hubs]);
+  }, [searchTerm, filterDistance, filterTrainer, filterState, hubs]);
 
   const handleJoinHub = async (hubId: string) => {
     if (!user?.id) {
@@ -590,6 +642,18 @@ const VidyaHubPage = () => {
                       <SelectItem value="withoutTrainer">Without Trainer</SelectItem>
                     </SelectContent>
                   </Select>
+                  
+                  <Select value={filterState} onValueChange={setFilterState}>
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue placeholder="State" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All States</SelectItem>
+                      {getAvailableStates().map(state => (
+                        <SelectItem key={state} value={state}>{state}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
               
@@ -644,13 +708,23 @@ const VidyaHubPage = () => {
                               )}
                             </div>
                           </div>
+                          <div className="mt-2">
+                            <p className="text-sm text-muted-foreground line-clamp-2">{hub.description}</p>
+                          </div>
                           <div className="mt-2 flex flex-wrap gap-1">
-                            {hub.languages.map((lang: string) => (
+                            {hub.languages?.map((lang: string) => (
                               <Badge key={lang} variant="secondary" className="text-xs">
                                 {lang}
                               </Badge>
                             ))}
                           </div>
+                          {hub.facilities && (
+                            <div className="mt-2">
+                              <p className="text-xs text-muted-foreground">
+                                <span className="font-semibold">Facilities:</span> {hub.facilities.join(", ")}
+                              </p>
+                            </div>
+                          )}
                         </CardContent>
                         <CardFooter className="pt-2 pb-3 flex flex-col sm:flex-row gap-2">
                           <Button 
