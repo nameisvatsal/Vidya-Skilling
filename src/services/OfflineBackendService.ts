@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { useOffline } from "@/contexts/OfflineContext";
 
@@ -19,6 +20,20 @@ interface LearningRequest {
 interface OfflineContentPackage {
   content_ids: string[];
   format: string; // "zip" | "tar" | "json"
+}
+
+interface DeviceCapabilities {
+  is_online: boolean;
+  has_low_bandwidth: boolean;
+  preferred_languages: string[];
+  storage_available_mb: number;
+}
+
+interface AdaptiveLearningRequest {
+  user_id: string;
+  topic: string;
+  current_progress: Record<string, number>; // {content_id: completion_percentage}
+  device_caps: DeviceCapabilities;
 }
 
 export const OfflineBackendService = {
@@ -97,6 +112,95 @@ export const OfflineBackendService = {
         content_order: [],
         estimated_duration: 0,
         offline_compatible: false
+      };
+    }
+  },
+
+  /**
+   * Generate adaptive learning path using Gemini API
+   */
+  async generateAdaptiveLearningPath(request: AdaptiveLearningRequest): Promise<{ 
+    recommendation: any; 
+    generated_at: string; 
+    source: "gemini" | "offline_cache" 
+  }> {
+    try {
+      const { data, error } = await supabase.functions.invoke("gemini-learning-path", {
+        body: {
+          action: "generateLearningPath",
+          payload: request
+        }
+      });
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error("Error generating adaptive learning path:", error);
+      
+      // Fallback with simple recommendation
+      return {
+        recommendation: {
+          recommended_content_order: ["article", "video", "exercise"],
+          estimated_study_time: 2.5,
+          difficulty_progression: "medium",
+          language_suggestions: request.device_caps.preferred_languages,
+          offline_compatibility_notes: "Using offline cache due to connection issues"
+        },
+        generated_at: new Date().toISOString(),
+        source: "offline_cache"
+      };
+    }
+  },
+
+  /**
+   * Optimize content for device capabilities
+   */
+  async optimizeContent(contentId: string, deviceCaps: DeviceCapabilities): Promise<any> {
+    try {
+      const { data, error } = await supabase.functions.invoke("gemini-content-optimize", {
+        body: {
+          action: "optimizeContent",
+          payload: { content_id: contentId, device_caps: deviceCaps }
+        }
+      });
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error("Error optimizing content:", error);
+      
+      // Fallback with basic recommendations
+      return {
+        format_recommendations: "Use text alternatives when offline",
+        download_strategy: "Progressive download recommended",
+        language_alternatives: deviceCaps.preferred_languages[0] || "en"
+      };
+    }
+  },
+
+  /**
+   * Assess learning progress and get recommendations
+   */
+  async assessProgress(userId: string, responses: Record<string, any[]>): Promise<any> {
+    try {
+      const { data, error } = await supabase.functions.invoke("gemini-assess-progress", {
+        body: {
+          action: "assessProgress",
+          payload: { user_id: userId, responses }
+        }
+      });
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error("Error assessing progress:", error);
+      
+      // Fallback
+      return {
+        strong_areas: [],
+        weak_areas: [],
+        content_adjustments: [],
+        pace_recommendation: "steady"
       };
     }
   },
@@ -204,5 +308,19 @@ export const OfflineBackendService = {
     } catch {
       return profile; // Return original if estimation fails
     }
+  },
+  
+  /**
+   * Get device capabilities in the format needed for Gemini API
+   */
+  async getDeviceCapabilities(): Promise<DeviceCapabilities> {
+    const profile = await this.updateDeviceProfile(this.getDeviceProfile());
+    
+    return {
+      is_online: profile.network_status !== "offline",
+      has_low_bandwidth: profile.network_status === "low-bandwidth",
+      preferred_languages: profile.preferred_languages,
+      storage_available_mb: profile.storage_mb
+    };
   }
 };

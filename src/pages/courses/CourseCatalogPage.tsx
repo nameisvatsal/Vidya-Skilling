@@ -1,320 +1,287 @@
 
 import { useState, useEffect } from "react";
-import { Search, Filter, Mic } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Search, Filter, Book, ChevronDown, Download } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+import { Card, CardContent } from "@/components/ui/card";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
 } from "@/components/ui/select";
-import CourseCard from "@/components/CourseCard";
-import VoiceInput from "@/components/VoiceInput";
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { useOffline } from "@/contexts/OfflineContext";
+import { 
+  mockCourses, 
+  COURSE_CATEGORIES, 
+  COURSE_LEVELS, 
+  LANGUAGES 
+} from "@/mocks/coursesData";
 
 const CourseCatalogPage = () => {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [allCourses, setAllCourses] = useState<any[]>([]);
-  const [filteredCourses, setFilteredCourses] = useState<any[]>([]);
-  const [popularCourses, setPopularCourses] = useState<any[]>([]);
-  const [newCourses, setNewCourses] = useState<any[]>([]);
-  const [isVoiceSearch, setIsVoiceSearch] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const { toast } = useToast();
-  
-  const [filters, setFilters] = useState({
-    category: "all",
-    level: "all",
-    language: "all",
-  });
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filteredCourses, setFilteredCourses] = useState(mockCourses);
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [selectedLevel, setSelectedLevel] = useState("all");
+  const [selectedLanguage, setSelectedLanguage] = useState("all");
+  const [showFilters, setShowFilters] = useState(false);
+  const navigate = useNavigate();
+  const { isOnline } = useOffline();
 
-  // Fetch courses from Supabase
   useEffect(() => {
-    const fetchCourses = async () => {
-      try {
-        setIsLoading(true);
-        
-        const { data, error } = await supabase
-          .from('courses')
-          .select('*');
-          
-        if (error) {
-          throw error;
-        }
-        
-        if (data) {
-          setAllCourses(data);
-          setFilteredCourses(data);
-          
-          // Set popular courses (could be based on enrollment count in a real app)
-          const popular = [...data].sort(() => 0.5 - Math.random()).slice(0, 3);
-          setPopularCourses(popular);
-          
-          // Set new courses (based on created_at)
-          const newest = [...data].sort((a, b) => 
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-          ).slice(0, 3);
-          setNewCourses(newest);
-        }
-      } catch (error) {
-        console.error("Error fetching courses:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load courses",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    let result = mockCourses;
     
-    fetchCourses();
-  }, [toast]);
-
-  useEffect(() => {
-    // Apply filters and search
-    try {
-      console.log("Applying filters:", filters);
-      let result = [...allCourses];
-      
-      if (searchTerm) {
-        result = result.filter(
-          (course) =>
-            course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (course.description && course.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
-            (course.category && course.category.toLowerCase().includes(searchTerm.toLowerCase()))
-        );
-      }
-      
-      if (filters.category && filters.category !== "all") {
-        result = result.filter((course) => course.category === filters.category);
-      }
-      
-      if (filters.level && filters.level !== "all") {
-        result = result.filter((course) => course.level === filters.level);
-      }
-      
-      console.log("Filtered courses count:", result.length);
-      setFilteredCourses(result);
-    } catch (error) {
-      console.error("Error filtering courses:", error);
-      setFilteredCourses(allCourses); // Fall back to all courses
+    // Apply search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(
+        course => 
+          course.title.toLowerCase().includes(query) ||
+          course.description.toLowerCase().includes(query) ||
+          course.tags.some(tag => tag.toLowerCase().includes(query))
+      );
     }
-  }, [searchTerm, filters, allCourses]);
+    
+    // Apply category filter
+    if (selectedCategory !== "all") {
+      result = result.filter(course => course.category === selectedCategory);
+    }
+    
+    // Apply level filter
+    if (selectedLevel !== "all") {
+      result = result.filter(course => course.level === selectedLevel);
+    }
+    
+    // Apply language filter
+    if (selectedLanguage !== "all") {
+      result = result.filter(course => course.language === selectedLanguage);
+    }
+    
+    setFilteredCourses(result);
+  }, [searchQuery, selectedCategory, selectedLevel, selectedLanguage]);
 
-  const handleFilterChange = (key: string, value: string) => {
-    console.log(`Changing filter ${key} to ${value}`);
-    setFilters((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const handleVoiceInput = (text: string) => {
-    setSearchTerm(text);
-    setIsVoiceSearch(false);
-  };
-
-  const clearFilters = () => {
-    setFilters({
-      category: "all",
-      level: "all",
-      language: "all",
-    });
-    setSearchTerm("");
+  const handleCourseClick = (courseId: string) => {
+    navigate(`/courses/${courseId}`);
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-2xl md:text-3xl font-bold mb-6">Course Catalog</h1>
-      
-      <div className="mb-6">
-        {!isVoiceSearch ? (
-          <div className="flex gap-2">
+    <div className="container mx-auto py-6 px-4">
+      <div className="flex flex-col space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold mb-2">Course Catalog</h1>
+          <p className="text-muted-foreground">
+            Discover learning content optimized for all connectivity levels
+          </p>
+        </div>
+
+        {/* Search and filters */}
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-4">
             <div className="relative flex-grow">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={18} />
               <Input
-                placeholder="Search courses..."
-                className="pl-8"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search courses, topics, skills..."
+                className="pl-10"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsVoiceSearch(true)}
-              className="border border-gray-200 dark:border-gray-800"
+            <Button 
+              variant="outline" 
+              className="flex items-center gap-2"
+              onClick={() => setShowFilters(!showFilters)}
             >
-              <Mic size={18} />
+              <Filter size={16} />
+              Filters
+              <ChevronDown size={16} className={`transform transition-transform ${showFilters ? 'rotate-180' : ''}`} />
             </Button>
           </div>
-        ) : (
-          <VoiceInput
-            onTextCapture={handleVoiceInput}
-            placeholder="Speak to search for courses..."
-          />
-        )}
-      </div>
-      
-      <Tabs defaultValue="all" className="mb-6">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="all">All Courses</TabsTrigger>
-          <TabsTrigger value="popular">Popular</TabsTrigger>
-          <TabsTrigger value="new">New</TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="all">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <Select 
-              value={filters.category} 
-              onValueChange={(value) => handleFilterChange("category", value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                <SelectItem value="Technology">Technology</SelectItem>
-                <SelectItem value="Business">Business</SelectItem>
-                <SelectItem value="Marketing">Marketing</SelectItem>
-                <SelectItem value="Finance">Finance</SelectItem>
-              </SelectContent>
-            </Select>
-            
-            <Select 
-              value={filters.level} 
-              onValueChange={(value) => handleFilterChange("level", value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Level" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Levels</SelectItem>
-                <SelectItem value="Beginner">Beginner</SelectItem>
-                <SelectItem value="Intermediate">Intermediate</SelectItem>
-                <SelectItem value="Advanced">Advanced</SelectItem>
-              </SelectContent>
-            </Select>
-            
-            <Select 
-              value={filters.language} 
-              onValueChange={(value) => handleFilterChange("language", value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Language" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Languages</SelectItem>
-                <SelectItem value="English">English</SelectItem>
-                <SelectItem value="Hindi">Hindi</SelectItem>
-                <SelectItem value="Tamil">Tamil</SelectItem>
-                <SelectItem value="Telugu">Telugu</SelectItem>
-                <SelectItem value="Kannada">Kannada</SelectItem>
-                <SelectItem value="Malayalam">Malayalam</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          
-          {((filters.category !== "all") || (filters.level !== "all") || (filters.language !== "all") || searchTerm) && (
-            <div className="flex justify-between items-center mb-4">
-              <div className="text-sm">
-                Showing {filteredCourses.length} results
-                {filters.category !== "all" && <span> in {filters.category}</span>}
-                {filters.level !== "all" && <span> at {filters.level} level</span>}
-                {filters.language !== "all" && <span> in {filters.language}</span>}
-                {searchTerm && <span> for "{searchTerm}"</span>}
+
+          {showFilters && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-md bg-muted/20 animate-in fade-in duration-200">
+              <div>
+                <label className="text-sm font-medium mb-1 block">Category</label>
+                <Select
+                  value={selectedCategory}
+                  onValueChange={setSelectedCategory}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {COURSE_CATEGORIES.map((category) => (
+                      <SelectItem key={category} value={category}>{category}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <Button variant="ghost" size="sm" onClick={clearFilters}>
-                Clear Filters
-              </Button>
+              <div>
+                <label className="text-sm font-medium mb-1 block">Level</label>
+                <Select
+                  value={selectedLevel}
+                  onValueChange={setSelectedLevel}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Level" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Levels</SelectItem>
+                    {COURSE_LEVELS.map((level) => (
+                      <SelectItem key={level.value} value={level.value}>{level.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1 block">Language</label>
+                <Select
+                  value={selectedLanguage}
+                  onValueChange={setSelectedLanguage}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Language" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Languages</SelectItem>
+                    {LANGUAGES.map((lang) => (
+                      <SelectItem key={lang.value} value={lang.value}>{lang.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           )}
+        </div>
+
+        {/* Course tabs */}
+        <Tabs defaultValue="all" className="w-full">
+          <TabsList className="mb-6 flex flex-wrap">
+            <TabsTrigger value="all">All Courses</TabsTrigger>
+            <TabsTrigger value="offline">Offline Available</TabsTrigger>
+            <TabsTrigger value="free">Free Courses</TabsTrigger>
+            <TabsTrigger value="popular">Popular</TabsTrigger>
+          </TabsList>
           
-          {isLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[1, 2, 3, 4, 5, 6].map((item) => (
-                <div key={item} className="bg-gray-100 dark:bg-gray-800 animate-pulse h-64 rounded-lg"></div>
-              ))}
+          <TabsContent value="all">
+            <CourseGrid 
+              courses={filteredCourses} 
+              onCourseClick={handleCourseClick} 
+            />
+          </TabsContent>
+          
+          <TabsContent value="offline">
+            <CourseGrid 
+              courses={filteredCourses.filter(course => course.availableOffline === true)} 
+              onCourseClick={handleCourseClick} 
+            />
+          </TabsContent>
+          
+          <TabsContent value="free">
+            <CourseGrid 
+              courses={filteredCourses.filter(course => course.price === 0)} 
+              onCourseClick={handleCourseClick} 
+            />
+          </TabsContent>
+          
+          <TabsContent value="popular">
+            <CourseGrid 
+              courses={filteredCourses.filter(course => course.isPopular === true)} 
+              onCourseClick={handleCourseClick} 
+            />
+          </TabsContent>
+        </Tabs>
+      </div>
+    </div>
+  );
+};
+
+interface CourseGridProps {
+  courses: typeof mockCourses;
+  onCourseClick: (id: string) => void;
+}
+
+const CourseGrid = ({ courses, onCourseClick }: CourseGridProps) => {
+  if (courses.length === 0) {
+    return (
+      <div className="py-12 text-center">
+        <Book size={48} className="mx-auto mb-4 text-gray-400" />
+        <h3 className="text-lg font-medium">No courses found</h3>
+        <p className="text-muted-foreground">Try adjusting your filters or search terms</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {courses.map((course) => (
+        <Card 
+          key={course.id} 
+          className="overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+          onClick={() => onCourseClick(course.id)}
+        >
+          <div className="aspect-video relative">
+            <img 
+              src={course.thumbnailUrl} 
+              alt={course.title} 
+              className="object-cover w-full h-full"
+            />
+            {course.availableOffline && (
+              <div className="absolute top-2 right-2 bg-green-500 text-white rounded-full p-1">
+                <Download size={16} />
+              </div>
+            )}
+            {course.level && (
+              <div className="absolute bottom-2 left-2">
+                <Badge variant={
+                  course.level === "beginner" ? "outline" :
+                  course.level === "intermediate" ? "secondary" : 
+                  "default"
+                }>
+                  {course.level}
+                </Badge>
+              </div>
+            )}
+          </div>
+          <CardContent className="p-4">
+            <div className="flex justify-between items-start mb-2">
+              <h3 className="font-semibold line-clamp-2">{course.title}</h3>
+              <div className="flex items-center gap-1 bg-yellow-100 dark:bg-yellow-900/30 px-2 py-0.5 rounded text-xs">
+                ★ {course.rating}
+              </div>
             </div>
-          ) : filteredCourses.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredCourses.map((course) => (
-                <CourseCard 
-                  key={course.id} 
-                  id={course.id}
-                  title={course.title}
-                  description={course.description || ""}
-                  image={course.thumbnail_url || "https://images.unsplash.com/photo-1498050108023-c5249f4df085?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80"}
-                  category={course.category || "Uncategorized"}
-                  duration={course.duration ? `${course.duration} weeks` : "Self-paced"}
-                  level={course.level}
-                  language={"English"} // Default since we don't have this field yet
-                />
-              ))}
+            <div className="text-sm text-muted-foreground mb-4 line-clamp-2">
+              {course.description}
             </div>
-          ) : (
-            <div className="text-center py-12">
-              <p className="text-xl font-medium mb-2">No courses found</p>
-              <p className="text-gray-500 mb-4">Try adjusting your filters or search term</p>
-              <Button onClick={clearFilters}>Clear Filters</Button>
+            <div className="flex justify-between items-center text-sm">
+              <span className="flex items-center gap-1">
+                <Book size={14} />
+                {course.totalModules} modules • {course.totalDuration}
+              </span>
+              <div>
+                {course.price === 0 ? (
+                  <span className="text-green-600 font-semibold">Free</span>
+                ) : (
+                  <div>
+                    {course.discountPrice ? (
+                      <>
+                        <span className="text-muted-foreground line-through mr-1">₹{course.price}</span>
+                        <span className="font-semibold text-vidya-primary">₹{course.discountPrice}</span>
+                      </>
+                    ) : (
+                      <span className="font-semibold">₹{course.price}</span>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          )}
-        </TabsContent>
-        
-        <TabsContent value="popular">
-          {isLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[1, 2, 3].map((item) => (
-                <div key={item} className="bg-gray-100 dark:bg-gray-800 animate-pulse h-64 rounded-lg"></div>
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {popularCourses.map((course) => (
-                <CourseCard 
-                  key={course.id} 
-                  id={course.id}
-                  title={course.title}
-                  description={course.description || ""}
-                  image={course.thumbnail_url || "https://images.unsplash.com/photo-1498050108023-c5249f4df085?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80"}
-                  category={course.category || "Uncategorized"}
-                  duration={course.duration ? `${course.duration} weeks` : "Self-paced"}
-                  level={course.level}
-                  language={"English"}
-                />
-              ))}
-            </div>
-          )}
-        </TabsContent>
-        
-        <TabsContent value="new">
-          {isLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[1, 2, 3].map((item) => (
-                <div key={item} className="bg-gray-100 dark:bg-gray-800 animate-pulse h-64 rounded-lg"></div>
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {newCourses.map((course) => (
-                <CourseCard 
-                  key={course.id} 
-                  id={course.id}
-                  title={course.title}
-                  description={course.description || ""}
-                  image={course.thumbnail_url || "https://images.unsplash.com/photo-1498050108023-c5249f4df085?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80"}
-                  category={course.category || "Uncategorized"}
-                  duration={course.duration ? `${course.duration} weeks` : "Self-paced"}
-                  level={course.level}
-                  language={"English"}
-                />
-              ))}
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
+          </CardContent>
+        </Card>
+      ))}
     </div>
   );
 };

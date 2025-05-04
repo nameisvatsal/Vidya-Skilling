@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useOffline } from "@/contexts/OfflineContext";
+import { OfflineBackendService } from "@/services/OfflineBackendService";
 
 interface AdaptiveContentProps {
   content: string;
@@ -69,18 +70,72 @@ const AdaptiveContent = ({
         return;
       }
       
-      // Otherwise, get the adaptation from the AI service
-      const enhancedPrompt = `
-        Adapt the following educational content to be more accessible for a ${currentComplexity} level learner.
-        ${currentLanguage !== 'en' ? `Translate to ${currentLanguage}.` : ''}
-        Make it engaging and easy to understand while preserving the key concepts:
+      // Try to use the Gemini-powered optimization first
+      try {
+        const deviceCaps = await OfflineBackendService.getDeviceCapabilities();
+        const optimizationResult = await OfflineBackendService.optimizeContent(
+          contentKey,
+          deviceCaps
+        );
         
-        ${content}
-      `;
-      
+        // If optimization was successful, use it
+        if (optimizationResult && optimizationResult.format_recommendations) {
+          // Use the optimized content recommendations to adjust our approach
+          
+          // Then fall back to regular AIService for the actual content transformation
+          const enhancedPrompt = `
+            Adapt the following educational content to be more accessible for a ${currentComplexity} level learner.
+            ${currentLanguage !== 'en' ? `Translate to ${currentLanguage}.` : ''}
+            Make it engaging and easy to understand while preserving the key concepts.
+            
+            ${optimizationResult.format_recommendations}
+            
+            Content:
+            ${content}
+          `;
+          
+          processWithAIService(enhancedPrompt, offlineData);
+        } else {
+          // If the optimization API failed, just use regular AIService
+          const enhancedPrompt = `
+            Adapt the following educational content to be more accessible for a ${currentComplexity} level learner.
+            ${currentLanguage !== 'en' ? `Translate to ${currentLanguage}.` : ''}
+            Make it engaging and easy to understand while preserving the key concepts:
+            
+            ${content}
+          `;
+          
+          processWithAIService(enhancedPrompt, offlineData);
+        }
+      } catch (error) {
+        // If Gemini API fails, fall back to regular AIService
+        const enhancedPrompt = `
+          Adapt the following educational content to be more accessible for a ${currentComplexity} level learner.
+          ${currentLanguage !== 'en' ? `Translate to ${currentLanguage}.` : ''}
+          Make it engaging and easy to understand while preserving the key concepts:
+          
+          ${content}
+        `;
+        
+        processWithAIService(enhancedPrompt, offlineData);
+      }
+    } catch (error) {
+      console.error("Error adapting content:", error);
+      setAdaptedContent(content);
+      toast({
+        title: "Error",
+        description: "Failed to adapt content. Showing original version.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
+    }
+  };
+  
+  const processWithAIService = async (prompt: string, offlineData: any) => {
+    try {
       const response = await AIService.generateContent({
-        prompt: enhancedPrompt,
-        language: { target: currentLanguage }, // Fixed: passing an object with target property
+        prompt: prompt,
+        language: { target: currentLanguage },
         mode: "adaptive-learning"
       });
       
@@ -96,7 +151,7 @@ const AdaptiveContent = ({
         queueSync(contentKey, newOfflineData);
         
         // Also cache in AIService
-        AIService.cacheResponse(enhancedPrompt, response.result);
+        AIService.cacheResponse(prompt, response.result);
       } else {
         toast({
           title: "Adaptation Failed",
@@ -106,11 +161,11 @@ const AdaptiveContent = ({
         setAdaptedContent(content);
       }
     } catch (error) {
-      console.error("Error adapting content:", error);
+      console.error("Error in AI service:", error);
       setAdaptedContent(content);
       toast({
         title: "Error",
-        description: "Failed to adapt content. Showing original version.",
+        description: "AI service failed. Showing original content.",
         variant: "destructive",
       });
     } finally {
