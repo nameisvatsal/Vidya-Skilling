@@ -16,6 +16,7 @@ app = FastAPI(title="Vidya Enhanced Backend", version="2.0")
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 model = genai.GenerativeModel("gemini-pro")
 
+
 # MongoDB setup
 client = AsyncIOMotorClient(os.getenv("MONGODB_URI"))
 db = client.vidya
