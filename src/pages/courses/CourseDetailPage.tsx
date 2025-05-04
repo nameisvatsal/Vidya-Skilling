@@ -1,21 +1,25 @@
 
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { Clock, Book, Award, User, Star, Calendar, Download, Share, Globe } from "lucide-react";
+import { Clock, Book, Award, User, Star, Calendar, Download, Share, Globe, FileVideo, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import OfflineContentDownloader from "@/components/OfflineContentDownloader";
-import { Course, getCourseById, mockCourses } from "@/mocks/coursesData";
+import { Course, getCourseById } from "@/mocks/coursesData";
 import { useToast } from "@/hooks/use-toast";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 
 const CourseDetailPage = () => {
   const { id } = useParams<{ id: string }>();
   const [course, setCourse] = useState<Course | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
+  const [quizSubmitted, setQuizSubmitted] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -65,6 +69,31 @@ const CourseDetailPage = () => {
     toast({
       title: "Enrolled Successfully!",
       description: `You've been enrolled in ${course.title}`,
+    });
+  };
+
+  const handleAnswerSelect = (questionIndex: number, answerIndex: number) => {
+    setSelectedAnswers(prev => ({
+      ...prev,
+      [questionIndex]: answerIndex
+    }));
+  };
+
+  const handleQuizSubmit = () => {
+    let correctAnswers = 0;
+    let totalQuestions = course.videoQuiz?.length || 0;
+    
+    course.videoQuiz?.forEach((question, index) => {
+      if (selectedAnswers[index] === question.correctAnswer) {
+        correctAnswers++;
+      }
+    });
+    
+    setQuizSubmitted(true);
+    
+    toast({
+      title: "Quiz Submitted",
+      description: `You got ${correctAnswers} out of ${totalQuestions} correct!`,
     });
   };
 
@@ -194,6 +223,8 @@ const CourseDetailPage = () => {
               <TabsList className="mb-6">
                 <TabsTrigger value="content">Course Content</TabsTrigger>
                 <TabsTrigger value="resources">Resources</TabsTrigger>
+                <TabsTrigger value="video-summary">Video Summary</TabsTrigger>
+                <TabsTrigger value="video-quiz">Video Quiz</TabsTrigger>
                 <TabsTrigger value="reviews">Reviews</TabsTrigger>
               </TabsList>
               
@@ -281,6 +312,113 @@ const CourseDetailPage = () => {
                       </CardContent>
                     </Card>
                   </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="video-summary">
+                <div className="space-y-4">
+                  <h2 className="text-xl font-semibold">Video Summary</h2>
+                  
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="flex items-start gap-4">
+                        <FileVideo className="h-8 w-8 text-vidya-primary flex-shrink-0 mt-1" />
+                        <div>
+                          <h3 className="text-lg font-medium mb-2">Key Points from Video</h3>
+                          <p className="text-muted-foreground">{course.videoSummary || "No summary available for this video."}</p>
+                          
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            {course.tags.map((tag) => (
+                              <Badge key={tag} variant="outline">{tag}</Badge>
+                            ))}
+                          </div>
+                          
+                          <div className="mt-6">
+                            <Button variant="outline" size="sm" className="flex items-center gap-2">
+                              <FileText className="h-4 w-4" />
+                              Download Full Transcript
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="video-quiz">
+                <div className="space-y-4">
+                  <h2 className="text-xl font-semibold">Video Quiz</h2>
+                  <p className="text-muted-foreground">Test your understanding of the concepts covered in this lesson.</p>
+                  
+                  {course.videoQuiz && course.videoQuiz.length > 0 ? (
+                    <div className="space-y-8 mt-6">
+                      {course.videoQuiz.map((quiz, questionIndex) => (
+                        <Card key={questionIndex}>
+                          <CardContent className="p-6">
+                            <h3 className="text-lg font-medium mb-4">Question {questionIndex + 1}: {quiz.question}</h3>
+                            
+                            <RadioGroup 
+                              onValueChange={(value) => handleAnswerSelect(questionIndex, parseInt(value))}
+                              disabled={quizSubmitted}
+                            >
+                              <div className="space-y-4">
+                                {quiz.options.map((option, optionIndex) => (
+                                  <div key={optionIndex} className="flex items-start space-x-2">
+                                    <RadioGroupItem 
+                                      value={optionIndex.toString()} 
+                                      id={`q${questionIndex}-opt${optionIndex}`} 
+                                      className={quizSubmitted ? 
+                                        (optionIndex === quiz.correctAnswer ? "border-green-500" : 
+                                        selectedAnswers[questionIndex] === optionIndex ? "border-red-500" : "") : ""
+                                      }
+                                    />
+                                    <Label 
+                                      htmlFor={`q${questionIndex}-opt${optionIndex}`}
+                                      className={quizSubmitted ? 
+                                        (optionIndex === quiz.correctAnswer ? "text-green-600 font-medium" : 
+                                        selectedAnswers[questionIndex] === optionIndex ? "text-red-600" : "") : ""
+                                      }
+                                    >
+                                      {option}
+                                    </Label>
+                                  </div>
+                                ))}
+                              </div>
+                            </RadioGroup>
+                            
+                            {quizSubmitted && (
+                              <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
+                                <p className="font-medium">
+                                  {selectedAnswers[questionIndex] === quiz.correctAnswer ? 
+                                    "✅ Correct!" : 
+                                    "❌ Incorrect! The right answer is: " + quiz.options[quiz.correctAnswer]}
+                                </p>
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      ))}
+                      
+                      {!quizSubmitted && (
+                        <Button onClick={handleQuizSubmit} className="mt-4">
+                          Submit Answers
+                        </Button>
+                      )}
+                      
+                      {quizSubmitted && (
+                        <Button onClick={() => setQuizSubmitted(false)} variant="outline" className="mt-4">
+                          Try Again
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <Card>
+                      <CardContent className="p-6 text-center">
+                        <p>No quiz available for this course.</p>
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
               </TabsContent>
               
