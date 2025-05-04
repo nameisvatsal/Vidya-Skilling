@@ -1,11 +1,13 @@
 
 import { useState, useEffect } from "react";
-import { Wifi, WifiOff, CheckCircle, XCircle, RefreshCw, Download } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Wifi, WifiOff, CheckCircle, XCircle, RefreshCw, Download, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { OfflineBackendService } from "@/services/OfflineBackendService";
 
 // Mock data
 const offlineItems = [
@@ -52,6 +54,7 @@ const OfflineSyncPage = () => {
     total: 500, // MB
   });
   const [items, setItems] = useState(offlineItems);
+  const [deviceProfile, setDeviceProfile] = useState<any>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -65,6 +68,21 @@ const OfflineSyncPage = () => {
     
     // Initial check
     setIsOnline(navigator.onLine);
+    
+    // Get device profile
+    const fetchDeviceProfile = async () => {
+      const profile = OfflineBackendService.getDeviceProfile();
+      const updatedProfile = await OfflineBackendService.updateDeviceProfile(profile);
+      setDeviceProfile(updatedProfile);
+      
+      // Update storage information based on device
+      setOfflineStorage({
+        used: Math.min(235, Math.floor(updatedProfile.storage_mb * 0.1)),
+        total: Math.min(500, Math.floor(updatedProfile.storage_mb * 0.2))
+      });
+    };
+    
+    fetchDeviceProfile();
 
     return () => {
       window.removeEventListener("online", handleOnlineStatus);
@@ -134,23 +152,47 @@ const OfflineSyncPage = () => {
     });
   };
 
+  const handleProcessWithOfflineAI = () => {
+    toast({
+      title: "Processing with Offline AI",
+      description: "Using lightweight LLM for content analysis",
+    });
+    
+    // In a real app, this would call the offline backend service
+    setTimeout(() => {
+      toast({
+        title: "Processing Complete",
+        description: "Offline AI has analyzed the content",
+      });
+    }, 2000);
+  };
+
   return (
     <div className="page-container">
       <div className="max-w-3xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="p-2 bg-vidya-light rounded-full">
-            {isOnline ? (
-              <Wifi className="text-vidya-primary h-6 w-6" />
-            ) : (
-              <WifiOff className="text-vidya-warning h-6 w-6" />
-            )}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-vidya-light rounded-full">
+              {isOnline ? (
+                <Wifi className="text-vidya-primary h-6 w-6" />
+              ) : (
+                <WifiOff className="text-vidya-warning h-6 w-6" />
+              )}
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">Offline & Sync</h1>
+              <p className="text-gray-600 dark:text-gray-400">
+                Manage your offline content and synchronization
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold">Offline & Sync</h1>
-            <p className="text-gray-600 dark:text-gray-400">
-              Manage your offline content and synchronization
-            </p>
-          </div>
+          
+          <Link to="/settings/offline/advanced">
+            <Button variant="outline" size="sm" className="flex items-center gap-1">
+              <Settings size={14} />
+              <span>Advanced</span>
+            </Button>
+          </Link>
         </div>
 
         <div className="flex items-center gap-3 mb-6">
@@ -185,9 +227,30 @@ const OfflineSyncPage = () => {
               <Progress value={(offlineStorage.used / offlineStorage.total) * 100} className="h-2" />
             </div>
             
+            {deviceProfile && (
+              <div className="text-sm text-gray-500 mb-4">
+                <p>Device: {deviceProfile.device_id}</p>
+                <p>Available Storage: {Math.floor(deviceProfile.storage_mb / 1024)} GB</p>
+              </div>
+            )}
+            
             <div className="flex justify-end">
-              <Button variant="outline" size="sm">
-                Manage Storage
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => {
+                  setOfflineStorage({
+                    used: 0,
+                    total: offlineStorage.total
+                  });
+                  setItems([]);
+                  toast({
+                    title: "Storage Cleared",
+                    description: "All offline content has been removed",
+                  });
+                }}
+              >
+                Clear Cache
               </Button>
             </div>
           </CardContent>
@@ -237,6 +300,53 @@ const OfflineSyncPage = () => {
               </p>
             </div>
           </CardContent>
+        </Card>
+
+        {/* Offline AI Card */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle>Offline AI Processing</CardTitle>
+            <CardDescription>
+              Use lightweight AI models when offline
+            </CardDescription>
+          </CardHeader>
+          
+          <CardContent className="pb-0">
+            <p className="text-sm mb-4">
+              Process content with efficient on-device AI models when you're offline.
+              These models provide basic functionality while conserving battery and storage.
+            </p>
+            
+            <div className="space-y-2 mb-4">
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Quiz Generation</span>
+                <Badge variant="outline">Available Offline</Badge>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Content Summarization</span>
+                <Badge variant="outline">Available Offline</Badge>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Voice Recognition</span>
+                <Badge variant="outline">Limited Offline</Badge>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Full Translation</span>
+                <Badge variant="outline" className="text-gray-400">Online Only</Badge>
+              </div>
+            </div>
+          </CardContent>
+          
+          <CardFooter className="flex justify-between pt-4">
+            <Link to="/settings/offline/advanced">
+              <Button variant="outline" size="sm">
+                Manage AI Settings
+              </Button>
+            </Link>
+            <Button size="sm" onClick={handleProcessWithOfflineAI}>
+              Process With Offline AI
+            </Button>
+          </CardFooter>
         </Card>
 
         <Card>
@@ -300,7 +410,12 @@ const OfflineSyncPage = () => {
                   <p className="text-sm text-gray-400 mb-4">
                     Download courses to access them when offline
                   </p>
-                  <Button>Browse Courses</Button>
+                  <Button 
+                    as={Link} 
+                    to="/courses"
+                  >
+                    Browse Courses
+                  </Button>
                 </div>
               )}
             </div>

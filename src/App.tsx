@@ -23,6 +23,7 @@ import ProgressDashboardPage from "@/pages/progress/ProgressDashboardPage";
 import LanguageSelectorPage from "@/pages/settings/LanguageSelectorPage";
 import OfflineSyncPage from "@/pages/settings/OfflineSyncPage";
 import AIVideoLearningPage from "@/pages/learning/AIVideoLearningPage";
+import OfflineAdvancedSettingsPage from "@/pages/settings/OfflineAdvancedSettingsPage";
 
 function App() {
   return (
@@ -60,6 +61,7 @@ function App() {
               {/* Settings Routes */}
               <Route path="settings/language" element={<LanguageSelectorPage />} />
               <Route path="settings/offline" element={<OfflineSyncPage />} />
+              <Route path="settings/offline/advanced" element={<OfflineAdvancedSettingsPage />} />
               
               {/* Not Found */}
               <Route path="*" element={<NotFoundPage />} />
