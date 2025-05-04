@@ -1,5 +1,4 @@
-
-import { book, video, code, calculator, mic, globe } from "lucide-react";
+import { Book, Video, Code, Calculator, Mic, Globe } from "lucide-react";
 
 export interface Course {
   id: string;
