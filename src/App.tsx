@@ -22,6 +22,7 @@ import MyPortfolioPage from "@/pages/credentials/MyPortfolioPage";
 import ProgressDashboardPage from "@/pages/progress/ProgressDashboardPage";
 import LanguageSelectorPage from "@/pages/settings/LanguageSelectorPage";
 import OfflineSyncPage from "@/pages/settings/OfflineSyncPage";
+import AIVideoLearningPage from "@/pages/learning/AIVideoLearningPage";
 
 function App() {
   return (
@@ -44,6 +45,9 @@ function App() {
               <Route path="courses" element={<CourseCatalogPage />} />
               <Route path="courses/:id" element={<CourseDetailPage />} />
               <Route path="courses/:id/module/:moduleId" element={<ModulePlayerPage />} />
+              
+              {/* AI Video Learning Routes */}
+              <Route path="ai-video-learning" element={<AIVideoLearningPage />} />
               
               {/* Credential Routes */}
               <Route path="credentials" element={<MyPortfolioPage />} />
