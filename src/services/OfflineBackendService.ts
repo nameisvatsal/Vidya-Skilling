@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { useOffline } from "@/contexts/OfflineContext";
 
@@ -155,7 +154,10 @@ export const OfflineBackendService = {
 
     // Estimate available RAM (this is just a rough approximation)
     const estimateRAM = () => {
-      return navigator.deviceMemory ? navigator.deviceMemory * 1024 : 4096; // Default to 4GB if not available
+      // navigator.deviceMemory is not in standard TypeScript types
+      // Safely check if it exists in a type-safe way
+      const nav = navigator as any;
+      return nav.deviceMemory ? nav.deviceMemory * 1024 : 4096; // Default to 4GB if not available
     };
 
     // Estimate available storage

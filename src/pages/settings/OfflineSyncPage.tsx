@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Wifi, WifiOff, CheckCircle, XCircle, RefreshCw, Download, Settings } from "lucide-react";
@@ -410,12 +409,11 @@ const OfflineSyncPage = () => {
                   <p className="text-sm text-gray-400 mb-4">
                     Download courses to access them when offline
                   </p>
-                  <Button 
-                    as={Link} 
-                    to="/courses"
-                  >
-                    Browse Courses
-                  </Button>
+                  <Link to="/courses">
+                    <Button>
+                      Browse Courses
+                    </Button>
+                  </Link>
                 </div>
               )}
             </div>
